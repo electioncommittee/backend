@@ -4,9 +4,11 @@
   "description": "A template for developing web server using express.",
   "main": "index.js",
   "scripts": {
-    "start": "NODE_ENV=production babel-node src/index.js --extensions '.js'",
-    "dev": "NODE_ENV=development babel-node src/index.js --extensions '.js'",
-    "build": "babel src -d lib"
+    "start": "NODE_ENV=production npm run serve",
+    "dev": "NODE_ENV=development npm run serve",
+    "serve": "babel --plugins transform-node-env-inline src -d dist && node dist/index.js",
+    "build": "npm run clean && NODE_ENV=production babel --plugins transform-node-env-inline src -d dist",
+    "clean": "rm -rf dist"
   },
   "author": "Hyperbola",
   "license": "ISC",
@@ -19,8 +21,10 @@
     "lodash": "^4.17.19"
   },
   "devDependencies": {
-    "@babel/core": "~7.9.0",
-    "@babel/node": "~7.8.7",
-    "@babel/preset-env": "~7.9.0"
+    "@babel/cli": "^7.10.0",
+    "@babel/core": "^7.10.0",
+    "@babel/node": "^7.10.0",
+    "@babel/preset-env": "^7.10.0",
+    "babel-plugin-transform-node-env-inline": "^0.4.3"
   }
 }

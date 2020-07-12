@@ -19,8 +19,7 @@ app.post("/", (req, res) => {
     res.sendStatus(301);
 });
 
-
-const port = process.env.PORT || 3000;
+const port = process.env.NODE_ENV === "production" ? 3000 : 3001;
 app.listen(port, function () {
     console.log(`Server running on port ${port}`);
 });
