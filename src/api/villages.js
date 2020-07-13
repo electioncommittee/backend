@@ -13,12 +13,12 @@ export default async function (req, res) {
 
     const distRange = req.query.countyId * 100;
     let distWhereCluase = '';
-    if (req.query.countyId != 0) distWhereCluase = ' and villages.dist BETWEEN ' + distRange + ' and ' + (distRange + 100);
-    if (req.query.districtId != 0) distWhereCluase = ' and villages.dist=' + req.query.districtId;
-
-    const sql = `
-    SELECT villages.id, villages.name FROM villages, ${tableName} 
-    WHERE year= ? and villages.id = ${tableName}.vill_id${distWhereCluase}`;
+    const distRange = req.query.countyId * 100;
+    if(req.query.countyId != 0)distWhereCluase = `and villages.dist BETWEEN ${distRange} and ${distRange+99}`;
+    if(req.query.districtId != 0)distWhereCluase = `and villages.dist = ${req.query.districtId}`;
+  
+    const sql = `SELECT villages.id, villages.name FROM villages, ${tableName} 
+    WHERE year= ? and villages.id = ${tableName}.vill_id ${distWhereCluase}`;
 
     const rows = await query(sql, args);
 
