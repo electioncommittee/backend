@@ -65,12 +65,17 @@ export default async function (req, res) {
     }
 
     const sql = `
-        SELECT ${candidateOrPartyTableName}.name AS name, ${candidateOrPartyTableName}.id AS id
-        FROM ${candidateTableName}, ${candidateOrPartyTableName}
+        SELECT 
+            ${candidateOrPartyTableName}.name AS name, 
+            ${candidateOrPartyTableName}.id AS id,
+            ${candidateTableName}.no AS no
+        FROM 
+            ${candidateTableName}, 
+            ${candidateOrPartyTableName}
         WHERE year = ? 
             AND ${joinClause} 
             AND ${areaWhereCluase} 
-            ORDER BY no
+        ORDER BY no
     `;
     const args = [req.query.year];
     const rows = await query(sql, args);
