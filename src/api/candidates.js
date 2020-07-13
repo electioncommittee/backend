@@ -1,12 +1,13 @@
-export default function (req, res) {
-    
-    const mariadb = require('mariadb/callback');
-    const conn = mariadb.createConnection({host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASS, database: 'nctu_database_term_project'});
+import query from "../../lib/db";
 
+export default async function (req, res) {
+    
     const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall'];
     
-    if(isNaN(req.query.year) || !array1.includes(req.query.type) || isNaN(req.query.area)) return res.sendStatus(400);
-
+    if( !array1.includes(req.query.type) ) {
+        res.sendStatus(400);
+        return
+    }
     let table1,id1,q1,area="";
     let table2='candidates';
     switch(req.query.type){
@@ -19,7 +20,7 @@ export default function (req, res) {
             table1 = 'legislator_candidates';
             id1 = 'and candidates.id=' + table1 + '.cand_id';
             q1 = 'candidates.name';
-            area = ' and legislator_candidates.constituency=' + req.query.area;
+            area = 'and legislator_candidates.constituency=' + req.query.area;
             break;
         case 'legislator_at_large':
             table1 = 'legislator_at_large_candidates';
@@ -31,7 +32,7 @@ export default function (req, res) {
             table1 = 'local_candidates';
             id1 = 'and candidates.id=' + table1 + '.cand_id';
             q1 = 'candidates.name';
-            area = ' and local_candidates.city_id=' + req.query.area;
+            area = 'and local_candidates.city_id=' + req.query.area;
             break;
         case 'recall':
             table1 = 'recalls';
@@ -40,22 +41,22 @@ export default function (req, res) {
             break;
     }
 
-    let sql = 'SELECT '+ q1 +' FROM '+ table1 +', '+ table2 +' WHERE year= ? ' + id1 + area + ' group by ' + q1;
+    const sql = `
+        SELECT ${q1} FROM ${table1}, ${table2}
+        WHERE year = ? ${id1} ${area} 
+        GROUP BY ${q1}`;
     
-    conn.query( sql, [req.query.year], function(err,rows){
-        if (err) throw err;
-        let temp=[];
-        for(let index in rows){
-            temp.push(rows[index].name);
-        }  
-        if(temp.length === 0)res.status(404).send();
-        else{
-            console.dir(temp);
-            res.status(200).send(
-                {
-                    candidate: temp
-                }
-            );
-        }
-    });
+    const args = [req.query.year];
+   
+    const rows = await query(sql, args);    
+  
+    const ret = [];
+    const candList = [];
+    for (const row of rows) {
+        candList.push(row.name);
+    }
+    ret.push({ candidate: candList});
+    
+    if (candList.length === 0) res.sendStatus(404);
+    else res.send(ret);
 }

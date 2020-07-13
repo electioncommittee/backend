@@ -1,10 +1,7 @@
-import { isUndefined } from 'lodash';
+import query from "../../lib/db";
 
-export default function (req, res) {
+export default async function (req, res) {
     
-    const mariadb = require('mariadb/callback');
-    const conn = mariadb.createConnection({host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASS, database: 'nctu_database_term_project'});
-
     const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall', 'referendum'];
     const array2 = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
     const array3 = ['country', 'county', 'district', 'village', 'constituency'];
@@ -33,6 +30,10 @@ export default function (req, res) {
             break;
         case 'recall':
             table1 = 'recalls';
+            table2 = '';
+            break;
+        case 'referendum':
+            table1 = 'referendums';
             table2 = '';
             break;
     }
@@ -68,7 +69,12 @@ export default function (req, res) {
                     temp_area = ' and local_candidates.city_id=' + req.query.area;
                     temp_table1 = table1;
                 }
-                let temp_sql = 'SELECT ' + table2 + '.no, SUM(' + table2 + '.poll) FROM '+ temp_table1 + ', ' + table2 + ' WHERE year= ?' + temp_area + ' GROUP BY no ORDER BY DESC';
+                const temp_sql = 'SELECT ' + table2 + '.no, SUM(' + table2 + '.poll) FROM '+ temp_table1 + ', ' + table2 + ' WHERE year= ?' + temp_area + ' GROUP BY no ORDER BY DESC';
+                
+                const temp_args = [];
+                
+                const temp_rows = await query(temp_sql, args);
+                id = temp_rows;
                 conn.query(temp_sql, [req.query.year], function(err,rows){
                     if(err) throw err;
                     if(rows.length == 0)flag=true;
@@ -77,6 +83,10 @@ export default function (req, res) {
                 break;
             case 'winner':
                 break;
+            case 'consent':
+                break;
+            case 'against':
+                break;
         }
     }
     else{
@@ -84,7 +94,7 @@ export default function (req, res) {
         id = table2 + '.no=' + req.query.no; 
     }
     
-    let sql = 'SELECT '+ q1 +' FROM '+ table1 +', '+ table2 +' WHERE year= ? ' + id1 + area + ' group by ' + q1;
+    const sql = 'SELECT '+ q1 +' FROM '+ table1 +', '+ table2 +' WHERE year= ? ' + id1 + area + ' group by ' + q1;
     
     conn.query( sql, [req.query.year], function(err,rows){
         if (err) throw err;
