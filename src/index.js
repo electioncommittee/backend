@@ -13,6 +13,14 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+if (process.env.NODE_ENV === "development") {
+    app.use((req, res, next) => {
+        if (req.method === "GET") console.debug(req.query);
+        else if (req.method === "POST") console.debug(req.body);
+        next();
+    })
+}
+
 
 const port = process.env.PORT;
 app.listen(port, function () {
@@ -20,7 +28,7 @@ app.listen(port, function () {
 });
 
 
-app.get("/api/get-county", county);
+app.get("/api/get-counties", county);
 app.get("/api/get-candidates", cand);
 app.get("/api/get-districts", dist);
 app.get("/api/get-villages", village);

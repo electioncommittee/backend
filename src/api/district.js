@@ -25,12 +25,7 @@ export default async function (req, res) {
     `;
 
     const rows = await query(sql, args);
-
-    // console.dir(rows);
-    const ret = [];
-    for (const row of rows) {
-        ret.push({ district: row.name, id: row.id });
-    }
+    const ret = rows.map(r => ({ name: r.name, id: r.id }));
     if (ret.length === 0) res.sendStatus(404);
     else res.send(ret);
 }
