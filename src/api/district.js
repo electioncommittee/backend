@@ -2,7 +2,7 @@ import query from "../../lib/db";
 
 export default async function (req, res) {
 
-    if (isNaN(req.query.year) || req.query.year < 2009 || req.query.year > 2020 || isNaN(req.query.countyId))
+    if (req.query.year < 2009 || req.query.year > 2020)
         return res.sendStatus(400);
 
     let y = req.query.year;
@@ -24,14 +24,8 @@ export default async function (req, res) {
     GROUP BY districts.id
     `;
 
-    console.log(sql);
     const rows = await query(sql, args);
-    
-    // console.dir(rows);
-    const ret = [];
-    for (const row of rows) {
-        ret.push({ district: row.name, id: row.id });
-    }
+    const ret = rows.map(r => ({ name: r.name, id: r.id }));
     if (ret.length === 0) res.sendStatus(404);
     else res.send(ret);
 }

@@ -1,17 +1,17 @@
 import query from "../../lib/db";
 
 export default async function (req, res) {
-    
+
     const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall', 'referendum'];
     const array2 = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
     const array3 = ['country', 'county', 'district', 'village', 'constituency'];
-    
-    if(!isUndefined(req.query.year) && isNaN(req.query.year) || !array1.includes(req.query.type) || isNaN(req.query.area) || !array3.includes(req.query.granule)) return res.sendStatus(400);
-    if(isNaN(req.query.no) && !array2.includes(req.query.no))return res.sendStatus(400);
 
-    let table1,table2;
+    if (!isUndefined(req.query.year) && isNaN(req.query.year) || !array1.includes(req.query.type) || isNaN(req.query.area) || !array3.includes(req.query.granule)) return res.sendStatus(400);
+    if (isNaN(req.query.no) && !array2.includes(req.query.no)) return res.sendStatus(400);
 
-    switch(req.query.type){
+    let table1, table2;
+
+    switch (req.query.type) {
         case 'president':
             table1 = 'president_candidates';
             table2 = 'president_polls';
@@ -50,7 +50,7 @@ export default async function (req, res) {
                     q1 = req.query.type + '.voter';
                     id = '';
                 }
-                else{
+                else {
                     table3 = req.query.type + '_voters';
                     q1 = table3 + '.voter';
                     id = '';
@@ -84,9 +84,9 @@ export default async function (req, res) {
                 break;
         }
     }
-    else{
+    else {
         q1 = table2 + '.poll';
-        id = table2 + '.no=' + req.query.no; 
+        id = table2 + '.no=' + req.query.no;
     }
     
     const sql = `
@@ -96,12 +96,12 @@ export default async function (req, res) {
     
     conn.query( sql, [req.query.year], function(err,rows){
         if (err) throw err;
-        let temp=[];
-        for(let index in rows){
+        let temp = [];
+        for (let index in rows) {
             temp.push(rows[index].name);
-        }  
-        if(temp.length === 0)res.status(404).send();
-        else{
+        }
+        if (temp.length === 0) res.status(404).send();
+        else {
             console.dir(temp);
             res.status(200).send(
                 {

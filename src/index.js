@@ -13,8 +13,16 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+if (process.env.NODE_ENV === "development") {
+    app.use((req, res, next) => {
+        if (req.method === "GET") console.debug(req.query);
+        else if (req.method === "POST") console.debug(req.body);
+        next();
+    })
+}
 
-const port = process.env.NODE_ENV === "production" ? 3000 : 3001;
+
+const port = process.env.PORT;
 app.listen(port, function () {
     console.log(`Server running on port ${port}`);
 });
