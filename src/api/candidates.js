@@ -1,62 +1,84 @@
 import query from "../../lib/db";
 
+async function recall(year, res) {
+    const sql = `
+        SELECT 
+            DISTINCT(recalls.cand_id) AS id,
+            candidates.name as name
+        FROM recalls
+        INNER JOIN candidates
+            ON recalls.cand_id = candidates.id
+        WHERE year = ?
+    `;
+    const rows = await query(sql, [year]);
+    if (rows.length === 0) res.sendStatus(404);
+    else res.send(rows);
+}
+
 export default async function (req, res) {
 
-    const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall'];
+    const area = req.query.area;
 
-    if (!array1.includes(req.query.type)) {
-        res.sendStatus(400);
-        return
-    }
-    let table1, id1, q1, area = "";
-    let table2 = 'candidates';
+    let candidateTableName = null,
+        candidateOrPartyTableName = 'candidates',
+        joinClause = null,
+        areaWhereCluase = "TRUE";
     switch (req.query.type) {
         case 'president':
-            table1 = 'president_candidates';
-            id1 = 'and candidates.id=' + table1 + '.cand_id';
-            q1 = 'candidates.name';
+            // area must be 0
+            candidateTableName = 'president_candidates';
+            joinClause = `candidates.id = president_candidates.cand_id`;
             break;
         case 'legislator':
-            table1 = 'legislator_candidates';
-            id1 = 'and candidates.id=' + table1 + '.cand_id';
-            q1 = 'candidates.name';
-            area = 'and legislator_candidates.constituency=' + req.query.area;
+            // area must be 0, county ID or constituency ID
+            candidateTableName = 'legislator_candidates';
+            joinClause = `candidates.id = legislator_candidates.cand_id`;
+            if (area == 0) { // country
+                areaWhereCluase = "TRUE";
+            }
+            else if (area < 100) { // county 
+                areaWhereCluase = `FLOOR(legislator_candidates.constituency / 100) = ${req.query.area}`;
+            }
+            else { // constituency
+                areaWhereCluase = `legislator_candidates.constituency = ${req.query.area}`;
+            }
             break;
         case 'legislator_at_large':
-            table1 = 'legislator_at_large_candidates';
-            id1 = 'and parties.id=' + table1 + '.party_id';
-            q1 = 'parties.name';
-            table2 = 'parties';
+            // area must be 0
+            candidateTableName = 'legislator_at_large_candidates';
+            candidateOrPartyTableName = 'parties';
+            joinClause = `parties.id = legislator_at_large_candidates.party_id`;
             break;
         case 'local':
-            table1 = 'local_candidates';
-            id1 = 'and candidates.id=' + table1 + '.cand_id';
-            q1 = 'candidates.name';
-            area = 'and local_candidates.city_id=' + req.query.area;
+            // area must be 0 or county ID
+            candidateTableName = 'local_candidates';
+            joinClause = `candidates.id = local_candidates.cand_id`;
+            if (area != 0) areaWhereCluase = `local_candidates.city_id = ${req.query.area}`;
             break;
         case 'recall':
-            table1 = 'recalls';
-            id1 = 'and candidates.id=' + table1 + '.cand_id';
-            q1 = 'candidates.name';
-            break;
+            // special case
+            recall(req.query.year, res);
+            return;
+        default:
+            res.sendStatus(400);
+            return;
     }
 
     const sql = `
-        SELECT ${q1} FROM ${table1}, ${table2}
-        WHERE year = ? ${id1} ${area} 
-        GROUP BY ${q1}`;
-
+        SELECT 
+            ${candidateOrPartyTableName}.name AS name, 
+            ${candidateOrPartyTableName}.id AS id,
+            ${candidateTableName}.no AS no
+        FROM 
+            ${candidateTableName}, 
+            ${candidateOrPartyTableName}
+        WHERE year = ? 
+            AND ${joinClause} 
+            AND ${areaWhereCluase} 
+        ORDER BY no
+    `;
     const args = [req.query.year];
-
     const rows = await query(sql, args);
-
-    const ret = [];
-    const candList = [];
-    for (const row of rows) {
-        candList.push(row.name);
-    }
-    ret.push({ candidate: candList });
-
-    if (candList.length === 0) res.sendStatus(404);
-    else res.send(ret);
+    if (rows.length === 0) res.sendStatus(404);
+    else res.send(rows);
 }
