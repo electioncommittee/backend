@@ -1,13 +1,15 @@
+import { isUndefined } from 'lodash';
+
 export default function (req, res) {
     
     const mariadb = require('mariadb/callback');
     const conn = mariadb.createConnection({host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASS, database: 'nctu_database_term_project'});
 
-    const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall'];
-    const array2 = ['void', 'voter', 'elect', 'winner'];
+    const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall', 'referendum'];
+    const array2 = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
     const array3 = ['country', 'county', 'district', 'village', 'constituency'];
-
-    if(isNaN(req.query.year) || !array1.includes(req.query.type) || isNaN(req.query.area) || !array3.includes(req.query.granule)) return res.sendStatus(400);
+    
+    if(!isUndefined(req.query.year) && isNaN(req.query.year) || !array1.includes(req.query.type) || isNaN(req.query.area) || !array3.includes(req.query.granule)) return res.sendStatus(400);
     if(isNaN(req.query.no) && !array2.includes(req.query.no))return res.sendStatus(400);
 
     let table1,table2;
