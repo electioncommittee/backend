@@ -1,4 +1,5 @@
 import query from "../../lib/db";
+import district from "./district";
 
 export default async function (req, res) {
 
@@ -6,7 +7,7 @@ export default async function (req, res) {
     const array2 = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
     const array3 = ['country', 'county', 'district', 'village', 'constituency'];
 
-    if (!isUndefined(req.query.year) && isNaN(req.query.year) || !array1.includes(req.query.type) || isNaN(req.query.area) || !array3.includes(req.query.granule)) return res.sendStatus(400);
+    if (!isUndefined(req.query.year) && isNaN(req.query.year) || !array1.includes(req.query.type) || !array3.includes(req.query.granule)) return res.sendStatus(400);
     if (isNaN(req.query.no) && !array2.includes(req.query.no)) return res.sendStatus(400);
 
     let table1, table2;
@@ -79,8 +80,12 @@ export default async function (req, res) {
             case 'winner':
                 break;
             case 'consent':
+                q1 = `${table1}.consent`;
+                id = '';
                 break;
             case 'against':
+                q1 = `${table1}.against`;
+                id = '';
                 break;
         }
     }
@@ -89,9 +94,45 @@ export default async function (req, res) {
         id = table2 + '.no=' + req.query.no;
     }
     
+    let areaWhereClause = '';
+    const area = req.query.area;
+    switch(req.query.granule){
+        case 'country':
+            break;
+        case 'county':
+            if( area === 0 )
+                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? `${table1}.`:'';
+            else 
+                areaWhereClause = ;
+            break;
+        case 'district':
+            break;
+        case 'village':
+            break;
+        case 'constituency':
+            break;
+    }
+
+    if(table2 != '') table2 = `, ${table2}`;
+    if(table3 != '') table3 = `, ${table3}`;
+    
+    const yearWhereClause = ( req.query.type === 'referendum' )? '' : yearWhereClause = `year = ${req.query.year}`;
+
+    let refCase = ( req.query.type === 'referendum' || req.query.type === 'recall ')? 
+    (req.query.type === 'recall')? `recalls.cand_id = ${req.query.case}` : `referendums.ref_case = ${req.query.case}` : '';
+
+    if( yearWhereClause != '' ) 
+        id = ( id === '' )? '' : `and ${id}`; 
+    
+    if( yearWhereClause != '' || id != '' ) 
+        area = ( area === '' )? '' : `and ${area}`;
+
+    if( yearWhereClause != '' || id != '' || area != '' ) 
+        refCase = ( refCase === '' )? '' : `and ${refCase}`;
+
     const sql = `
-    SELECT ${q1} FROM ${table1} ${', ' + table2} ${', ' + table3}
-    WHERE year = ? ${id} ${area} 
+    SELECT ${q1} FROM ${table1} ${table2} ${table3}
+    WHERE ${yearWhereClause} ${id} ${area} ${refCase}
     GROUP BY ${q1}`;
     
     conn.query( sql, [req.query.year], function(err,rows){
