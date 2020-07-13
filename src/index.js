@@ -20,8 +20,8 @@ app.listen(port, function () {
 });
 
 
-// app.get("/get-county", county);
-// app.get("/get-candidates", cand);
+app.get("/api/get-county", county);
+app.get("/api/get-candidates", cand);
 app.get("/api/get-districts", dist);
-// app.get("/get-villages", village);
-// app.get("/get-polls", poll);
+app.get("/api/get-villages", village);
+app.get("/api/get-polls", poll);
