@@ -79,7 +79,6 @@ export default async function (req, res) {
     `;
     const args = [req.query.year];
     const rows = await query(sql, args);
-    const ret = rows.map(r => ({ name: r.name, id: r.id, no: r.no }));
-    if (ret.length === 0) res.sendStatus(404);
-    else res.send(ret);
+    if (rows.length === 0) res.sendStatus(404);
+    else res.send(rows);
 }
