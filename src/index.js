@@ -14,7 +14,7 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-const port = process.env.NODE_ENV === "production" ? 3000 : 3001;
+const port = process.env.PORT;
 app.listen(port, function () {
     console.log(`Server running on port ${port}`);
 });
