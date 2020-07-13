@@ -2,7 +2,7 @@ import query from "../../lib/db";
 
 export default async function (req, res) {
     
-    const sql = `SELECT * FROM cities`;
+    const sql = `SELECT * FROM cities ORDER BY id`;
 
     if(isNaN(req.query.year) || req.query.year < 2009 || req.query.year > 2020)return res.sendStatus(400);
     

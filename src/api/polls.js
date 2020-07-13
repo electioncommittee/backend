@@ -39,15 +39,14 @@ export default async function (req, res) {
     }
 
     let q1,id,table3='';
-    let flag=false;
     if(isNaN(req.query.no)){
         switch(req.query.no){
             case 'void':
-                q1 = (req.query.type == 'recall')? table1 + '.void' : table2 + '.poll';
-                id = (req.query.type == 'recall')? '' : table2 + '.no=-1';
+                q1 = ( req.query.type === 'recall' || req.query.type === 'referendum' )? table1 + '.void' : table2 + '.poll';
+                id = ( req.query.type === 'recall' || req.query.type === 'referendum' )? '' : table2 + '.no=-1';
                 break;
             case 'voter':
-                if(req.query.type == 'recall'){
+                if( req.query.type === 'recall' || req.query.type === 'referendum' ){
                     q1 = req.query.type + '.voter';
                     id = '';
                 }
@@ -59,27 +58,23 @@ export default async function (req, res) {
                 break;
             case 'elect':
                 let temp_area='';
-                let cons = req.query.area * 100;
-                let temp_table1 = '';
-                if(req.query.type == 'legislator'){
-                    temp_area = ' and legislator_candidate.constituency BETWEEN ' + cons + ' and ' + (cons+100);
-                    temp_table1 = table1;
+                let temp_range = req.query.area * 1000000;
+                if(req.query.type === 'legislator'){
+                    temp_area = 'and legislator_polls.vill_id BETWEEN ' + temp_range + ' and ' + ( temp_range * 2 - 1 );
                 }
-                if(req.query.type == 'local'){
-                    temp_area = ' and local_candidates.city_id=' + req.query.area;
-                    temp_table1 = table1;
+                if(req.query.type === 'local'){
+                    temp_area = 'and local_polls.vill_id BETWEEN ' + temp_range + ' and ' + ( temp_range * 2 - 1 );
                 }
-                const temp_sql = 'SELECT ' + table2 + '.no, SUM(' + table2 + '.poll) FROM '+ temp_table1 + ', ' + table2 + ' WHERE year= ?' + temp_area + ' GROUP BY no ORDER BY DESC';
                 
-                const temp_args = [];
+                const temp_sql = `SELECT ${table2}.no, SUM(${table2}.poll) 
+                FROM ${table2} 
+                WHERE year = ? ${temp_area} 
+                GROUP BY no 
+                ORDER BY DESC`;
                 
-                const temp_rows = await query(temp_sql, args);
-                id = temp_rows;
-                conn.query(temp_sql, [req.query.year], function(err,rows){
-                    if(err) throw err;
-                    if(rows.length == 0)flag=true;
-                    else id = rows[0].no;
-                });        
+                const temp_args = [req.query.year];
+                const temp_rows = await query(temp_sql, temp_args);
+                id = table2 + '.no=' + temp_rows[0].no;
                 break;
             case 'winner':
                 break;
@@ -94,7 +89,10 @@ export default async function (req, res) {
         id = table2 + '.no=' + req.query.no; 
     }
     
-    const sql = 'SELECT '+ q1 +' FROM '+ table1 +', '+ table2 +' WHERE year= ? ' + id1 + area + ' group by ' + q1;
+    const sql = `
+    SELECT ${q1} FROM ${table1} ${', ' + table2} ${', ' + table3}
+    WHERE year = ? ${id} ${area} 
+    GROUP BY ${q1}`;
     
     conn.query( sql, [req.query.year], function(err,rows){
         if (err) throw err;

@@ -16,7 +16,7 @@ export default async function(req, res){
 
     let distWhereCluase = '';
     let distRange = req.query.countyId * 100;
-    if(req.query.countyId != 0)distWhereCluase = ' and villages.dist BETWEEN ' + distRange + ' and ' + (distRange+100);
+    if(req.query.countyId != 0)distWhereCluase = ' and villages.dist BETWEEN ' + distRange + ' and ' + (distRange+99);
     if(req.query.districtId != 0)distWhereCluase = ' and villages.dist=' + req.query.districtId;
   
     const sql = `SELECT villages.id, villages.name FROM villages, ${tableName} 
