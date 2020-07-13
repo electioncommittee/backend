@@ -26,3 +26,15 @@ app.listen(port, function () {
 
 import county from "./api/county";
 app.get("/get-county", county);
+
+import cand from "./api/candidates";
+app.get("/get-candidates", cand);
+
+import dist from "./api/district";
+app.get("/get-districts", dist);
+
+import village from "./api/villages";
+app.get("/get-villages", village);
+
+import poll from "./api/polls";
+app.get("/get-polls", poll);
