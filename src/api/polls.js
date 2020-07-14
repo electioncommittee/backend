@@ -1,209 +1,273 @@
 import query from "../../lib/db";
 
-export default async function (req, res) {
+const INVALID_REQUEST = "Invalid argument sent from client.";
 
-    const array1 = ['president', 'legislator', 'legislator_at_large', 'local', 'recall', 'referendum'];
-    const array2 = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
-    const array3 = ['country', 'county', 'district', 'village', 'constituency'];
+function validateRequest(query) {
+    const typeList = ['president', 'legislator', 'legislator_at_large', 'local', 'recall', 'referendum'];
+    const targetList = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
+    const granuleList = ['country', 'county', 'district', 'village', 'constituency'];
 
-    if (!isUndefined(req.query.year) && isNaN(req.query.year) || !array1.includes(req.query.type) || !array3.includes(req.query.granule)) return res.sendStatus(400);
-    if (isNaN(req.query.no) && !array2.includes(req.query.no)) return res.sendStatus(400);
+    if (!typeList.includes(query.type)) return false;
+    if (!targetList.includes(query.no) && isNaN(query.no)) return false;
+    if (!granuleList.includes(query.granule)) return false;
+    return true;
+}
 
-    let table1, table2;
-    switch (req.query.type) {
-        case 'president':
-            table1 = 'president_candidates';
-            table2 = 'president_polls';
-            break;
-        case 'legislator':
-            table1 = 'legislator_candidates';
-            table2 = 'legislator_polls';
-            break;
-        case 'legislator_at_large':
-            table1 = 'legislator_at_large_candidates';
-            table2 = 'legislator_at_large_polls';
-            break;
-        case 'local':
-            table1 = 'local_candidates';
-            table2 = 'local_polls';
-            break;
-        case 'recall':
-            table1 = 'recalls';
-            table2 = '';
-            break;
-        case 'referendum':
-            table1 = 'referendums';
-            table2 = '';
-            break;
-    }
-    
-    let areaWhereClause = '', areaGroupBy = '', q2 = '', table4 = '';
+async function task(req, res) {
+
+    const type = req.query.type;
+    const granule = req.query.granule;
     const area = req.query.area;
-    switch(req.query.granule){
-        case 'country':
-            q2 = '0';
-            break;
-        case 'county':
-            if( area === 0 ){
-                q2 = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/1000000 AS DECIMAL(2,0)) AS id` : `CAST(${table2}.vill_id/1000000 AS DECIMAL(2,0)) AS id` ;
-                areaGroupBy = `GROUP BY id`;
-            }
-            else{ 
-                q2 = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/1000000 AS DECIMAL(2,0)) AS id` : `CAST(${table2}.vill_id/1000000 AS DECIMAL(2,0)) AS id` ;
-                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}`: `CAST(${table2}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}` ;
-            }
-            break;
-        case 'district':
+    const caze = req.query.case; // `case` is presevered word
+    const no = req.query.no;
 
-            q2 = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                `CAST(${table1}.vill_id/10000 AS DECIMAL(4,0)) AS id` : `CAST(${table2}.vill_id/10000 AS DECIMAL(4,0)) AS id` ;
-            
-            if( area === 0 ){
-                areaGroupBy = `GROUP BY id`;
+    // Determine the source table to lookup, which contains the target 
+    // data we need such as count of voters or polls. Let the main
+    // source table have a shortcut name `p`.
+    let mainTable;
+    // Determine the columns to be selected.
+    const selectedColumns = [];
+    // Determine other tables that should be joined to the main table.
+    const joinedTables = [];
+    // Determine the column which gives the voter number; this column may be 
+    // summed up or not
+    let voteColumn;
+    // Determine the clause which filter the candidate no (if needed)
+    let candidateWhereClause = "TRUE";
+
+    const isRecOrRef = type === "recall" || type === "referendum";
+    switch (no) {
+        case 'void':
+            if (isRecOrRef) {
+                mainTable = `${type}s AS p`
+                voteColumn = "p.void";
             }
-            else if( area < 100 ){ 
-                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}`: `CAST(${table2}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}` ;
-                areaGroupBy = `GROUP BY id`;
-            }
-            else{
-                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/10000 AS DECIMAL(4,0)) = ${area}`: `CAST(${table2}.vill_id/10000 AS DECIMAL(4,0)) = ${area}` ;
+            else {
+                mainTable = `${type}_polls AS p`
+                voteColumn = "p.poll";
+                candidateWhereClause = `p.no = -1`;
             }
             break;
-        case 'village':
-
-            q2 = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                `${table1}.vill_id AS id` : `${table2}.vill_id AS id` ;
-
-            if( area === 0){
-            }
-            else if( area < 99 ){
-                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}`: `CAST(${table2}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}` ;
-                areaGroupBy = `GROUP BY id`;
-            }
-            else if( area < 10000){
-                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `CAST(${table1}.vill_id/10000 AS DECIMAL(4,0)) = ${area}`: `CAST(${table2}.vill_id/10000 AS DECIMAL(4,0)) = ${area}` ;
-                areaGroupBy = `GROUP BY id`;
-            }
-            else{
-                areaWhereClause = ( req.query.type === 'recall' || req.query.type === 'referendum' )? 
-                    `${table1}.vill_id = ${area}`: `${table2}.vill_id = ${area}` ;
-            }
+        case 'voter':
+            if (isRecOrRef) mainTable = `${type}s AS p`
+            else mainTable = `${type}_voters AS p`
+            voteColumn = "p.voter";
             break;
-        case 'constituency':
+        case 'consent':
+            // In this case, it must be referendum or recall
+            if (!isRecOrRef) throw new Error(INVALID_REQUEST);
 
-            q2 = `legislator_constituencies.constituency AS id`;
-            table4 = 'legislator_constituencies';
-
-            if( area === 0){
-                areaGroupBy = `GROUP BY id`;
-            }
-            else if( area < 100){
-                areaGroupBy = `GROUP BY id`;
-                areaWhereClause = `CAST(${table2}.vill_id/1000000 AS DECIMAL(2,0)) = ${area}`;
-            }
-
+            mainTable = `${type}s AS p`
+            voteColumn = "p.consent";
             break;
+        case 'against':
+            // In this case, it must be referendum or recall
+            if (!isRecOrRef) throw new Error(INVALID_REQUEST);
+
+            mainTable = `${type}s as p`
+            voteColumn = "p.against";
+            break;
+        default:
+            // In this case the `no` indicates the no number of candidates
+            // In this case, it must not be referendum or recall
+            if (isRecOrRef) throw new Error(INVALID_REQUEST);
+            // In this case, it muse be an integer
+            if (!isFinite(no)) throw new Error(INVALID_REQUEST);
+
+            mainTable = `${type}_polls AS p`;
+            voteColumn = "p.poll";
+            candidateWhereClause = `p.no = ${no}`;
     }
 
-    let q1,id,table3='';
-    if(isNaN(req.query.no)){
-        switch(req.query.no){
-            case 'void':
-                q1 = ( req.query.type === 'recall' || req.query.type === 'referendum' )? `${table1}.void` : `${table2}.poll`;
-                id = ( req.query.type === 'recall' || req.query.type === 'referendum' )? '' : `${table2}.no=-1`;
-                break;
-            case 'voter':
-                if( req.query.type === 'recall' || req.query.type === 'referendum' ){
-                    q1 = `${req.query.type}.voter`;
-                    id = '';
-                }
-                else {
-                    table3 = `${req.query.type}_voters`;
-                    q1 = `${table3}.voter`;
-                    id = '';
-                }
-                break;
-            case 'elect':
-                let temp_area='';
-                let temp_range = req.query.area * 1000000;
-                if(req.query.type === 'legislator'){
-                    temp_area = `and legislator_polls.vill_id BETWEEN ' + temp_range + ' and ' + ( temp_range * 2 - 1 )`;
-                }
-                if(req.query.type === 'local'){
-                    temp_area = 'and local_polls.vill_id BETWEEN ' + temp_range + ' and ' + ( temp_range * 2 - 1 );
-                }
-                
-                const temp_sql = `SELECT ${table2}.no, SUM(${table2}.poll) 
-                FROM ${table2} 
-                WHERE year = ? ${temp_area} 
-                GROUP BY no 
-                ORDER BY DESC`;
-                
-                const temp_args = [req.query.year];
-                const temp_rows = await query(temp_sql, temp_args);
-                id = table2 + '.no=' + temp_rows[0].no;
-                break;
-            case 'winner':
-                break;
-            case 'consent':
-                q1 = `${table1}.consent`;
-                id = '';
-                break;
-            case 'against':
-                q1 = `${table1}.against`;
-                id = '';
-                break;
+    // Determine the principle of GROUP BY, which depends on the granule
+    let groupByPolicy;
+    switch (granule) {
+        case 'country':
+            // In this case, the selected area Id must be 0
+            if (area != 0) throw new Error(INVALID_REQUEST);
+            // In this case, the election type should not be recall
+            if (type === "recall") throw new Error(INVALID_REQUEST);
+
+            // In this case, no matter the election type is, the GROUP BY
+            // policy is to sum up all rows. Hence no policy required
+            groupByPolicy = null;
+
+            // Not select any village or to query which district or county 
+            // it belongs to; such data are not needed (undefined) accoring 
+            // to the API. Only one column is selected: `vote`.
+            selectedColumns.push(`SUM(${voteColumn}) AS vote`)
+            break;
+
+        case 'county':
+            // In this case, the election type should not be legislator
+            if (type === "legislator") throw new Error(INVALID_REQUEST);
+            // In this case, the selected area Id must be less than 100
+            if (area >= 100) throw new Error(INVALID_REQUEST);
+
+            // County table are requried to group rows
+            joinedTables.push("INNER JOIN cities AS c ON FLOOR(p.vill_id / 1000000) = c.id")
+
+            // In this case, the GROUP BY policy is to calculate county ID
+            groupByPolicy = `FLOOR(p.vill_id / 1000000)`;
+
+            // Select vote and county data
+            selectedColumns.push(`SUM(${voteColumn})  AS vote      `);
+            selectedColumns.push(`c.id                AS countyId  `);
+            selectedColumns.push(`c.name              AS countyName`);
+            break;
+
+        case 'district':
+            // In this case, the election type should not be legislator
+            if (type === "legislator") throw new Error(INVALID_REQUEST);
+            // In this case, the selected area Id must not be a village ID
+            if (area >= 1000000) throw new Error(INVALID_REQUEST);
+
+            // Two tables are required to group rows
+            joinedTables.push("INNER JOIN cities    AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
+            joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
+
+            // In this case, the GROUP BY policy is to calculate district ID
+            groupByPolicy = `FLOOR(p.vill_id / 10000)`;
+
+            // Select vote, county and district data
+            selectedColumns.push(`SUM(${voteColumn}) AS vote        `);
+            selectedColumns.push(`c.id               AS countyId    `);
+            selectedColumns.push(`c.name             AS countyName  `);
+            selectedColumns.push(`d.id               AS districtId  `);
+            selectedColumns.push(`d.name             AS districtName`);
+            break;
+
+        case 'village':
+            // In this case, any election type or any area ID is legal
+            // NO PARAM CHECK
+
+            // Two tables are required to group rows
+            joinedTables.push("INNER JOIN cities    AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
+            joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
+
+            // In this case, There is no GROUP policy
+            groupByPolicy = null;
+
+            // Select all required columns
+            // No sum up
+            selectedColumns.push(`${voteColumn} AS vote        `);
+            selectedColumns.push(`c.id          AS countyId    `);
+            selectedColumns.push(`c.name        AS countyName  `);
+            selectedColumns.push(`d.id          AS districtId  `);
+            selectedColumns.push(`d.name        AS districtName`);
+            selectedColumns.push(`v.id          AS villageId   `);
+            selectedColumns.push(`v.name        AS villageName `);
+
+            // If this is a legislator election, we need constituency data
+            if (type === "legislator") {
+                joinedTables.push("INNER JOIN legislator_constituencies  AS cst  ON p.vill_id = cst.vill_id");
+                selectedColumns.push(`cst.constituency AS constituencyId`);
+            }
+            break;
+
+        case 'constituency':
+            // In this case, election type should be legislator
+            if (type !== "legislator") throw new Error(INVALID_REQUEST);
+            // In this case, area ID should be 0, county ID or constituency ID
+            if (area > 1000000) throw new Error(INVALID_REQUEST);
+
+            // This case is hard and need to lookup table `legislator_constituencies`
+            // We need county data and constituency data
+            joinedTables.push("INNER JOIN legislator_constituencies   AS cst   ON p.vill_id                  = cst.vill_id")
+            joinedTables.push("INNER JOIN cities                    AS c     ON FLOOR(p.vill_id / 1000000) = c.id       ")
+
+            // The GROUP BY policy is by constituency
+            groupByPolicy = "cst.constituency"
+
+            // Select columns
+            selectedColumns.push(`${voteColumn}    AS vote          `);
+            selectedColumns.push(`c.id             AS countyId      `);
+            selectedColumns.push(`c.name           AS countyName    `);
+            selectedColumns.push(`cst.constituency AS constituencyId`);
+            break;
+
+        default:
+            throw new Error(INVALID_REQUEST);
+    }
+
+    // Determine the area where clause about param `area`
+    // We only select rows whose villages are from desired region
+    let areaWhereClause;
+    if (area == 0) {
+        // In this case any region should be considered
+        areaWhereClause = "TRUE";
+    }
+    else if (area < 100) {
+        // This should be county ID
+        areaWhereClause = `FLOOR(p.vill_id / 1000000) = ${area}`;
+    }
+    else if (area < 10000) {
+        // This should be:
+        // - constituency;   if in legislator election
+        // - district ID;    or else
+        if (type === "legislator") {
+            // Table `legislator_constituency` must have be joined as cst
+            areaWhereClause = `cst.constituency = ${area}`;
+        }
+        else {
+            areaWhereClause = `FLOOR(p.vill_id / 10000) == ${area}`
         }
     }
     else {
-        q1 = table2 + '.poll';
-        id = table2 + '.no=' + req.query.no;
+        // This should ne village ID
+        areaWhereClause = `p.vill_id = ${area}`;
     }
 
-    if(table2 != '') table2 = `, ${table2}`;
-    if(table3 != '') table3 = `, ${table3}`;
-    if(table4 != '') table4 = `, ${table4}`;
+    // Determine the where clause about param `year`
+    // In normal election as well as recalls, this argument is same as what user gives
+    // In referendum, this argument is undefined
+    let yearWhereClause = `p.year = ${req.query.year}`;
+    if (req.query.type === 'referendum') {
+        yearWhereClause = "TRUE";
+    }
 
-    const yearWhereClause = ( req.query.type === 'referendum' )? '' : yearWhereClause = `year = ${req.query.year}`;
+    // Determine the where clause about param `case`
+    // In normal elections, this argument is undefined
+    // In recalls, `cases` indicates the recalled candidate ID
+    // In referendums, `case` indicates the referedum case number
+    let caseWhereClause = "TRUE";
+    if (type === "recall") caseWhereClause = `recalls.cand_id = ${caze}`;
+    else if (type === "referendum") caseWhereClause = `referendums.ref_case = ${caze}`;
 
-    let refCase = ( req.query.type === 'referendum' || req.query.type === 'recall ')? 
-    (req.query.type === 'recall')? `recalls.cand_id = ${req.query.case}` : `referendums.ref_case = ${req.query.case}` : '';
-
-    if( yearWhereClause != '' ) 
-        id = ( id === '' )? '' : `and ${id}`; 
-    
-    if( yearWhereClause != '' || id != '' ) 
-        area = ( area === '' )? '' : `and ${area}`;
-
-    if( yearWhereClause != '' || id != '' || area != '' ) 
-        refCase = ( refCase === '' )? '' : `and ${refCase}`;
-
+    // Generate SQL statment and perform query
     const sql = `
-    SELECT ${q1} ${q2} FROM ${table1} ${table2} ${table3} ${table4}
-    WHERE ${yearWhereClause} ${id} ${areaWhereClause} ${refCase}
-    ${areaGroupBy}`;
-    
-    conn.query( sql, [req.query.year], function(err,rows){
-        if (err) throw err;
-        let temp = [];
-        for (let index in rows) {
-            temp.push(rows[index].name);
-        }
-        if (temp.length === 0) res.status(404).send();
-        else {
-            console.dir(temp);
-            res.status(200).send(
-                {
-                    candidate: temp
-                }
-            );
-        }
-    });
+        SELECT ${selectedColumns.join(', ')} 
+        FROM ${mainTable} ${joinedTables.join(', ')}
+        WHERE ${yearWhereClause}
+            AND ${candidateWhereClause}
+            AND ${areaWhereClause}
+            AND ${caseWhereClause}
+        ${groupByPolicy ? `GROUP BY ${groupByPolicy}` : ""}
+    `;
+    console.debug(sql);
+    res.send(sql);
+    return;
+
+    const rows = await query(sql, [req.query.year]);
+
+    // Response the result
+    // TODO: not clean code
+    let temp = [];
+    for (let index in rows) {
+        temp.push(rows[index].name);
+    }
+    if (temp.length === 0) {
+        res.sendStatus(404);
+        return;
+    }
+    res.send({ candidate: temp });
+}
+
+export default async function (req, res) {
+    try {
+        task(req, res);
+    } catch (e) {
+        if (e === INVALID_REQUEST) res.sendStatus(400);
+        else throw e;
+    }
 }
