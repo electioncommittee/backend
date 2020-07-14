@@ -98,14 +98,13 @@ async function elect(args, res) {
 
 const INVALID_REQUEST = "Invalid argument sent from client.";
 
-async function task(req, res) {
+function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, orderByPoll = false) {
 
-    // params
-    const type = req.query.type;
-    const granule = req.query.granule;
-    const area = req.query.area;
-    const caze = req.query.case; // `case` is presevered word
-    const no = req.query.no;
+    // If this query is concerning about winner or elect, a subquery is 
+    // needed. We have special function for this case.
+    if (no === "winner") {
+        return winnerTask(year, type, granule, area, caze);
+    }
 
     // Determine the source table to lookup, which contains the target 
     // data we need such as count of voters or polls. Let the main
@@ -115,58 +114,118 @@ async function task(req, res) {
     const selectedColumns = [];
     // Determine other tables that should be joined to the main table.
     const joinedTables = [];
+    // Determine the principle of GROUP BY, which depends on the granule
+    const groupByPolicies = [];
     // Determine the column which gives the voter number; this column may be 
     // summed up or not
     let voteColumn;
     // Determine the clause which filter the candidate no (if needed)
     let candidateWhereClause = "TRUE";
 
+    // In the following block we try to analyze the target candidate the client
+    // wants to query. We have to determine some columns, which is defined in
+    // the API.
+    // - vote         : In most (just almost) case it is sum of polls of rows.
+    // - no            
+    // - candidateId  
+    // - candidateName
     const isRecOrRef = type === "recall" || type === "referendum";
     switch (no) {
-        case 'void':
+        case 'all':
+            // This param is not in standard API, but plays as utility for other 
+            // function. Block normal client to send such request
+            if (!isSuperUser) throw new Error(INVALID_REQUEST);
+
+            // In recalls or referendums, retrieve whether consent or against.
+            // Two cases have to be discussed:
+            // (1) If the granule is village, we simplu use MAX function to
+            //     decide which rows to be selected
+            // (2) otherwise we need to first SUM these rows then perform MAX; in
+            //     this case we create two columns vv and xx which values are not 
+            //     required to be sent back to the client
+            // In this case no candidateId or candidateName columns
             if (isRecOrRef) {
                 mainTable = `${type}s AS p`
-                voteColumn = "p.void";
+                selectedColumns.push("p.no AS no");
+
+                if (granule === "village") { // case (1)
+                    selectedColumns.push(`SUM(MAX(p.consent, p.against)) AS vote`);
+                }
+                else {                       // case (2)
+                    selectedColumns.push("SUM(p.consent) AS vv  ");
+                    selectedColumns.push("SUM(p.against) AS xx  ");
+                    selectedColumns.push("MAX(vv, xx)    AS vote");
+                }
+            }
+
+            // In normal election, retrieve all candidates (exclusive of void polls)
+            // In this case, GROUP BY `no` is required, and we do not want to put
+            // void polls into consideration; hence a where claues is required.
+            else {
+                mainTable = `${type}_polls AS p`;
+                selectedColumns.push(`SUM(p.poll) AS vote`);
+                selectedColumns.push(`p.no        AS no  `);
+                groupByPolicies.push("p.no");
+                candidateWhereClause = "p.no != -1";
+            }
+            break;
+
+        case 'void':
+            // In this case `no`, `candidateId` and `candidateName` columns are 
+            // omitted
+            if (isRecOrRef) {
+                mainTable = `${type}s AS p`
+                selectedColumns.push(`SUM(p.void) AS vote`);
             }
             else {
                 mainTable = `${type}_polls AS p`
-                voteColumn = "p.poll";
+                selectedColumns.push(`SUM(p.poll) AS vote`);
                 candidateWhereClause = `p.no = -1`;
             }
             break;
+
         case 'voter':
-            if (isRecOrRef) mainTable = `${type}s AS p`
-            else mainTable = `${type}_voters AS p`
-            voteColumn = "p.voter";
+            // In this case `no`, `candidateId` and `candidateName` columns are 
+            // omitted
+            mainTable = isRecOrRef ? `${type}s AS p` : `${type}_voters AS p`;
+            selectedColumns.push(`SUM(p.voter) AS vote`);
             break;
+
         case 'consent':
             // In this case, it must be referendum or recall
             if (!isRecOrRef) throw new Error(INVALID_REQUEST);
 
             mainTable = `${type}s AS p`
-            voteColumn = "p.consent";
+            selectedColumns.push(`SUM(p.consent) AS vote`);
+            selectedColumns.push(`consent        AS no  `);
+            selectedColumns.push(`"consent"      AS no  `);
             break;
+
         case 'against':
             // In this case, it must be referendum or recall
             if (!isRecOrRef) throw new Error(INVALID_REQUEST);
 
-            mainTable = `${type}s AS p`
-            voteColumn = "p.against";
+            mainTable = `${type}s AS p`;
+            selectedColumns.push(`SUM(p.against) AS vote`);
+            selectedColumns.push(`"against"      AS no  `);
             break;
+
         default:
-            // In this case the `no` indicates the no number of candidates
             // In this case, it must not be referendum or recall
             if (isRecOrRef) throw new Error(INVALID_REQUEST);
             // In this case, it muse be an integer
             if (!isFinite(no)) throw new Error(INVALID_REQUEST);
 
+            // In this case GROUP BY no is required
             mainTable = `${type}_polls AS p`;
-            voteColumn = "p.poll";
             candidateWhereClause = `p.no = ${no}`;
+            selectedColumns.push(`SUM(p.poll) AS vote`);
+            selectedColumns.push(`${no}       AS no  `);
+            groupByPolicies.push(`p.no`);
+            break;
     }
 
-    // Determine the principle of GROUP BY, which depends on the granule
-    let groupByPolicy;
+
     switch (granule) {
         case 'country':
             // In this case, the selected area Id must be 0
@@ -175,13 +234,12 @@ async function task(req, res) {
             if (type === "recall") throw new Error(INVALID_REQUEST);
 
             // In this case, no matter the election type is, the GROUP BY
-            // policy is to sum up all rows. Hence no policy required
-            groupByPolicy = null;
+            // policy is to sum up all rows.
+            groupByPolicies.push('*');
 
             // Not select any village or to query which district or county 
             // it belongs to; such data are not needed (undefined) accoring 
-            // to the API. Only one column is selected: `vote`.
-            selectedColumns.push(`SUM(${voteColumn}) AS vote`)
+            // to the API. So no any other columns should be selected.
             break;
 
         case 'county':
@@ -194,10 +252,9 @@ async function task(req, res) {
             joinedTables.push("INNER JOIN cities AS c ON FLOOR(p.vill_id / 1000000) = c.id")
 
             // In this case, the GROUP BY policy is to calculate county ID
-            groupByPolicy = `FLOOR(p.vill_id / 1000000)`;
+            groupByPolicies.push(`FLOOR(p.vill_id / 1000000)`);
 
             // Select vote and county data
-            selectedColumns.push(`SUM(${voteColumn})  AS vote      `);
             selectedColumns.push(`c.id                AS countyId  `);
             selectedColumns.push(`c.name              AS countyName`);
             break;
@@ -213,10 +270,9 @@ async function task(req, res) {
             joinedTables.push("INNER JOIN districts  AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
 
             // In this case, the GROUP BY policy is to calculate district ID
-            groupByPolicy = `FLOOR(p.vill_id / 10000)`;
+            groupByPolicies.push(`FLOOR(p.vill_id / 10000)`);
 
             // Select vote, county and district data
-            selectedColumns.push(`SUM(${voteColumn}) AS vote        `);
             selectedColumns.push(`c.id               AS countyId    `);
             selectedColumns.push(`c.name             AS countyName  `);
             selectedColumns.push(`d.id               AS districtId  `);
@@ -232,18 +288,17 @@ async function task(req, res) {
             joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
             joinedTables.push("INNER JOIN villages    AS v   ON       p.vill_id            = v.id")
 
-            // In this case, There is no GROUP policy
-            groupByPolicy = null;
+            // In this case, The GROUP BY policy is simply village ID
+            groupByPolicies.push('p.vill_id')
 
             // Select all required columns
             // No sum up
-            selectedColumns.push(`${voteColumn} AS vote        `);
-            selectedColumns.push(`c.id          AS countyId    `);
-            selectedColumns.push(`c.name        AS countyName  `);
-            selectedColumns.push(`d.id          AS districtId  `);
-            selectedColumns.push(`d.name        AS districtName`);
-            selectedColumns.push(`v.id          AS villageId   `);
-            selectedColumns.push(`v.name        AS villageName `);
+            selectedColumns.push(`c.id               AS countyId    `);
+            selectedColumns.push(`c.name             AS countyName  `);
+            selectedColumns.push(`d.id               AS districtId  `);
+            selectedColumns.push(`d.name             AS districtName`);
+            selectedColumns.push(`v.id               AS villageId   `);
+            selectedColumns.push(`v.name             AS villageName `);
 
             // If this is a legislator election, we need constituency data
             if (type === "legislator") {
@@ -264,7 +319,7 @@ async function task(req, res) {
             joinedTables.push("INNER JOIN cities                      AS c     ON FLOOR(p.vill_id / 1000000) = c.id       ")
 
             // The GROUP BY policy is by constituency
-            groupByPolicy = "cst.constituency"
+            groupByPolicies.push("cst.constituency")
 
             // Select columns
             selectedColumns.push(`${voteColumn}    AS vote          `);
@@ -277,7 +332,7 @@ async function task(req, res) {
             throw new Error(INVALID_REQUEST);
     }
 
-    // Determine the area where clause about param `area`
+    // Determine the area-where-clause about param `area`
     // We only select rows whose villages are from desired region
     let areaWhereClause;
     if (area == 0) {
@@ -301,17 +356,17 @@ async function task(req, res) {
         }
     }
     else {
-        // This should ne village ID
+        // This should be village ID
         areaWhereClause = `p.vill_id = ${area}`;
     }
+
 
     // Determine the where clause about param `year`
     // In normal election as well as recalls, this argument is same as what user gives
     // In referendum, this argument is undefined
-    let yearWhereClause = `p.year = ${req.query.year}`;
-    if (req.query.type === 'referendum') {
-        yearWhereClause = "TRUE";
-    }
+    let yearWhereClause = `p.year = ${year}`;
+    if (type === 'referendum') yearWhereClause = "TRUE";
+
 
     // Determine the where clause about param `case`
     // In normal elections, this argument is undefined
@@ -329,41 +384,68 @@ async function task(req, res) {
             AND ${candidateWhereClause}
             AND ${areaWhereClause}
             AND ${caseWhereClause}
-        ${groupByPolicy ? `GROUP BY ${groupByPolicy}` : ""}
+        GROUP BY ${groupByPolicies.join(', ')}
+        ${orderByPoll ? "ORDER BY vote DESC" : ""}
     `;
-    console.debug(sql);
-    res.send(sql);
-    return;
+    return sql;
+}
 
-    const rows = await query(sql, [req.query.year]);
 
-    // Response the result
-    // TODO: not clean code
-    let temp = [];
-    for (let index in rows) {
-        temp.push(rows[index].name);
+
+function winnerTask(year, type, granule, area, caze) {
+
+    // We first SELECT all required rows; then performs a subquery
+    const innerQuery = generateSQL(year, type, granule, area, caze, "all", true, true);
+
+    // Determine the GROUP BY policy; this depends on granule
+    // The ORDER BY policy is always same as GROUP BY
+    let groupByAndOrderByPolicy;
+    switch (granule) {
+        case "country":
+            // In this case no subquery is needed
+            groupByAndOrderByPolicy = null;
+            break;
+        case "county":
+            groupByAndOrderByPolicy = "countyId";
+            break;
+        case "legislator":
+            groupByAndOrderByPolicy = "legislatorId";
+            break;
+        case "district":
+            groupByAndOrderByPolicy = "districtId";
+            break;
+        case "village":
+            groupByAndOrderByPolicy = "villageId";
+            break;
+        default:
+            throw new Error(INVALID_REQUEST);
     }
-    if (temp.length === 0) {
-        res.sendStatus(404);
-        return;
-    }
-    res.send({ candidate: temp });
+
+    const query = `
+        SELECT * FROM (${innerQuery}) AS tmp
+        GROUP BY ${groupByAndOrderByPolicy || "*"}
+        ORDER BY ${groupByAndOrderByPolicy || "no"}
+    `
+    return query;
 }
 
 export default async function (req, res) {
     try {
-        task(req, res);
+        const sql = generateSQL(
+            req.query.year,
+            req.query.type,
+            req.query.granule,
+            req.query.area,
+            req.query.case,
+            req.query.no
+        );
+        res.send(sql);
+        return;
+        const rows = await query(sql);
+        res.send(rows);
     } catch (e) {
         if (e === INVALID_REQUEST) res.sendStatus(400);
         else throw e;
+        res.sendStatus(400);
     }
-}
-
-async function winner(req, res) {
-
-    const type = req.query.type;
-    const granule = req.query.granule;
-    const area = req.query.area;
-    const caze = req.query.case; // `case` is presevered word
-    const no = req.query.no;
 }
