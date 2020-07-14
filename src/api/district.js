@@ -2,9 +2,6 @@ import query from "../../lib/db";
 
 export default async function (req, res) {
 
-    if (req.query.year < 2009 || req.query.year > 2020)
-        return res.sendStatus(400);
-
     let y = req.query.year;
     if (y > 2009 && y % 2 == 1) y--;
     const args = [y, y];
