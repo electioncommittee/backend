@@ -356,7 +356,7 @@ function electTask(year, type, granule, area) {
             else if (area < 1000000) oArea = Math.floor(area / 1000000);
             break;
         case "local":
-            oGranule = "local";
+            oGranule = "county";
             if (area < 100) oArea = area;
             else if (area < 1000000) oArea = Math.floor(area / 1000000);
             break;
