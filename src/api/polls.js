@@ -110,14 +110,12 @@ function validateRequest(query) {
 
 async function task(req, res) {
 
-    // Params
     const type = req.query.type;
     const granule = req.query.granule;
     const area = req.query.area;
     const caze = req.query.case; // `case` is presevered word
     const no = req.query.no;
-    const year = req.query.year;
-    
+
     // Determine the source table to lookup, which contains the target 
     // data we need such as count of voters or polls. Let the main
     // source table have a shortcut name `p`.
@@ -129,7 +127,7 @@ async function task(req, res) {
     // Determine the column which gives the voter number; this column may be 
     // summed up or not
     let voteColumn;
-    // Determine the clause which filters the candidate no number (if needed)
+    // Determine the clause which filter the candidate no (if needed)
     let candidateWhereClause = "TRUE";
 
     const isRecOrRef = type === "recall" || type === "referendum";
@@ -220,9 +218,9 @@ async function task(req, res) {
             if (area >= 1000000) throw new Error(INVALID_REQUEST);
 
             // Two tables are required to group rows
-            joinedTables.push("INNER JOIN cities      AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
-            joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
-
+            joinedTables.push("INNER JOIN cities     AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
+            joinedTables.push("INNER JOIN districts  AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
+            
             // In this case, the GROUP BY policy is to calculate district ID
             groupByPolicy = `FLOOR(p.vill_id / 10000)`;
 
@@ -241,6 +239,7 @@ async function task(req, res) {
             // Two tables are required to group rows
             joinedTables.push("INNER JOIN cities      AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
             joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
+            joinedTables.push("INNER JOIN villages    AS v   ON       p.vill_id            = v.id")
 
             // In this case, There is no GROUP policy
             groupByPolicy = null;
@@ -318,8 +317,8 @@ async function task(req, res) {
     // Determine the where clause about param `year`
     // In normal election as well as recalls, this argument is same as what user gives
     // In referendum, this argument is undefined
-    let yearWhereClause = `p.year = ${year}`;
-    if (type === 'referendum') {
+    let yearWhereClause = `p.year = ${req.query.year}`;
+    if (req.query.type === 'referendum') {
         yearWhereClause = "TRUE";
     }
 
@@ -328,8 +327,8 @@ async function task(req, res) {
     // In recalls, `cases` indicates the recalled candidate ID
     // In referendums, `case` indicates the referedum case number
     let caseWhereClause = "TRUE";
-    if (type === "recall") caseWhereClause = `p.cand_id = ${caze}`;
-    else if (type === "referendum") caseWhereClause = `p.ref_case = ${caze}`;
+    if (type === "recall") caseWhereClause = `recalls.cand_id = ${caze}`;
+    else if (type === "referendum") caseWhereClause = `referendums.ref_case = ${caze}`;
 
     // Generate SQL statment and perform query
     const sql = `
