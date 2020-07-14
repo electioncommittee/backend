@@ -239,8 +239,8 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             groupByPolicies.push(`FLOOR(p.vill_id / 1000000)`);
 
             // Select vote and county data
-            selectedColumns.push(`c.id       AS countyId  `);
-            selectedColumns.push(`c.name     AS countyName`);
+            selectedColumns.push(`c.id   AS countyId  `);
+            selectedColumns.push(`c.name AS countyName`);
             break;
 
         case 'district':
@@ -268,9 +268,9 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             // NO PARAM CHECK
 
             // Two tables are required to group rows
-            joinedTables.push("INNER JOIN cities      AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
-            joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
-            joinedTables.push("INNER JOIN villages    AS v   ON       p.vill_id            = v.id")
+            joinedTables.push("INNER JOIN cities      AS c   ON FLOOR(p.vill_id / 1000000) = c.id");
+            joinedTables.push("INNER JOIN districts   AS d   ON FLOOR(p.vill_id / 10000)   = d.id");
+            joinedTables.push("INNER JOIN villages    AS v   ON       p.vill_id            = v.id");
 
             // In this case, The GROUP BY policy is simply village ID
             groupByPolicies.push('p.vill_id')
@@ -291,14 +291,11 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             // In this case, area ID should be 0, county ID or constituency ID
             if (area > 1000000) throw new Error(INVALID_REQUEST);
 
-            // This case is hard and need to lookup table `legislator_constituencies`
-            // We need county data and constituency data
-            joinedTables.push("INNER JOIN legislator_constituencies   AS lc   ON p.vill_id                  = lc.vill_id")
-            joinedTables.push("INNER JOIN cities                      AS c    ON FLOOR(p.vill_id / 1000000) = c.id       ")
-
             // The GROUP BY policy is by constituency
             groupByPolicies.push("lc.constituency")
-
+            
+            joinedTables.push("INNER JOIN cities                     AS c      ON FLOOR(p.vill_id / 1000000) = c.id       ")
+            
             // Select columns
             selectedColumns.push(`c.id             AS countyId      `);
             selectedColumns.push(`c.name           AS countyName    `);
@@ -337,10 +334,12 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             selectedColumns.push(`cand.id         AS candidateId  `);
             selectedColumns.push(`party.id        AS partyId      `);
             selectedColumns.push(`party.name      AS partyName    `);
-            joinedTables.push(`INNER JOIN legislator_candidates      AS pc    ON p.no     = pc.no      
+            joinedTables.push(`INNER JOIN legislator_constituencies  AS lc     ON p.vill_id                  = lc.vill_id 
+                                    AND lc.year = ${year}`)
+            joinedTables.push(`INNER JOIN legislator_candidates      AS pc     ON p.no                       = pc.no      
                                     AND lc.constituency = pc.constituency`);
-            joinedTables.push(`INNER JOIN candidates                 AS cand  ON cand.id  = pc.cand_id `);
-            joinedTables.push(`INNER JOIN parties                    AS party ON party.id = pc.party_id`);
+            joinedTables.push(`INNER JOIN candidates                 AS cand   ON cand.id                    = pc.cand_id `);
+            joinedTables.push(`INNER JOIN parties                    AS party  ON party.id                   = pc.party_id`);
             break;
 
         case "legislator_at_large":
@@ -452,7 +451,7 @@ function electTask(year, type, granule, area) {
         SELECT * 
         FROM (${electList}) AS l 
         INNER JOIN (${mainTable}) AS r
-            ON l.candidate_id = r.candidate_id
+            ON l.candidateId = r.candidateId
     `;
 }
 
@@ -472,8 +471,8 @@ function winnerTask(year, type, granule, area, caze) {
         case "county":
             groupByAndOrderByPolicy = "countyId";
             break;
-        case "legislator":
-            groupByAndOrderByPolicy = "legislatorId";
+        case "constituency":
+            groupByAndOrderByPolicy = "constituencyId";
             break;
         case "district":
             groupByAndOrderByPolicy = "districtId";
