@@ -2,12 +2,12 @@ import query from "../../lib/db";
 //args[]=[type, year, area, granule]
 async function elect(args, res) {
     let sql;
-    if(args[0] === 'president'){
-        
+    if (args[0] === 'president') {
+
     }
-    else if(args[0] === 'local'){
+    else if (args[0] === 'local') {
         //參考用sql
-        const temp_sql =`
+        const temp_sql = `
         SELECT t3.no,t3.cityid,t3.polls
         FROM
             (SELECT SUM(t1.poll) as polls,floor(t1.vill_id/1000000) as cityid,t1.no as no
@@ -25,60 +25,61 @@ async function elect(args, res) {
         WHERE t4.polls=t3.polls AND t3.cityid=t4.cityid`
 
         //以城市為單位
-        if(args[3] === 'county'){
+        if (args[3] === 'county') {
             //範圍:全國
-            if(args[2] == 0){
+            if (args[2] == 0) {
 
             }
             //範圍:某城市
-            else{
+            else {
 
             }
         }
         //以鄉鎮市區為單位
-        else if(args[3] === 'district'){
+        else if (args[3] === 'district') {
             //範圍:全國
-            if(args[2] == 0){
+            if (args[2] == 0) {
 
             }
             //範圍:某城市
-            else{
-                
+            else {
+
             }
         }
         //以村里為單位
-        else{
+        else {
             //範圍:全國
-            if(args[2] == 0){
+            if (args[2] == 0) {
 
             }
             //範圍:某城市
-            else{
-                
+            else {
+
             }
         }
     }
-    else if(args[0] === 'legislator'){
+    else if (args[0] === 'legislator') {
         //參考用sql
         const temp_sql = ``;
-        
+
         //以選區為單位
-        if(args[3] === 'constituency'){
+        if (args[3] === 'constituency') {
             //範圍:全國
-            if(args[2] == 0){
-                sql=`
+            if (args[2] == 0) {
+                sql = `
                 `
             }
             //範圍:某城市
-            else if(args[2] < 100){
+            else if (args[2] < 100) {
                 sql = `
                 `
             }
         }
         //以村里為單位
-        else if(args[3] === 'village'){
+        else if (args[3] === 'village') {
             //範圍:全國
-            if(args[2] == 0){console.log(123);
+            if (args[2] == 0) {
+                console.log(123);
                 sql = `
                 
                 `
@@ -86,7 +87,7 @@ async function elect(args, res) {
         }
     }
     //legislator_at_large
-    else{
+    else {
 
     }
     console.log(sql);
@@ -97,19 +98,9 @@ async function elect(args, res) {
 
 const INVALID_REQUEST = "Invalid argument sent from client.";
 
-function validateRequest(query) {
-    const typeList = ['president', 'legislator', 'legislator_at_large', 'local', 'recall', 'referendum'];
-    const targetList = ['void', 'voter', 'elect', 'winner', 'consent', 'against'];
-    const granuleList = ['country', 'county', 'district', 'village', 'constituency'];
-
-    if (!typeList.includes(query.type)) return false;
-    if (!targetList.includes(query.no) && isNaN(query.no)) return false;
-    if (!granuleList.includes(query.granule)) return false;
-    return true;
-}
-
 async function task(req, res) {
 
+    // params
     const type = req.query.type;
     const granule = req.query.granule;
     const area = req.query.area;
@@ -220,7 +211,7 @@ async function task(req, res) {
             // Two tables are required to group rows
             joinedTables.push("INNER JOIN cities     AS c   ON FLOOR(p.vill_id / 1000000) = c.id")
             joinedTables.push("INNER JOIN districts  AS d   ON FLOOR(p.vill_id / 10000)   = d.id")
-            
+
             // In this case, the GROUP BY policy is to calculate district ID
             groupByPolicy = `FLOOR(p.vill_id / 10000)`;
 
@@ -327,8 +318,8 @@ async function task(req, res) {
     // In recalls, `cases` indicates the recalled candidate ID
     // In referendums, `case` indicates the referedum case number
     let caseWhereClause = "TRUE";
-    if (type === "recall") caseWhereClause = `recalls.cand_id = ${caze}`;
-    else if (type === "referendum") caseWhereClause = `referendums.ref_case = ${caze}`;
+    if (type === "recall") caseWhereClause = `p.cand_id = ${caze}`;
+    else if (type === "referendum") caseWhereClause = `p.ref_case = ${caze}`;
 
     // Generate SQL statment and perform query
     const sql = `
@@ -366,4 +357,13 @@ export default async function (req, res) {
         if (e === INVALID_REQUEST) res.sendStatus(400);
         else throw e;
     }
+}
+
+async function winner(req, res) {
+
+    const type = req.query.type;
+    const granule = req.query.granule;
+    const area = req.query.area;
+    const caze = req.query.case; // `case` is presevered word
+    const no = req.query.no;
 }
