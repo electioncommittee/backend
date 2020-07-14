@@ -7,89 +7,72 @@ async function elect(args, res) {
 
     }
     else if (args[0] === 'local') {
-        //參考用sql
-        const temp_sql = `
-        SELECT t3.no,t3.cityid,t3.polls
-        FROM
-            (SELECT SUM(t1.poll) as polls,floor(t1.vill_id/1000000) as cityid,t1.no as no
-            FROM local_polls as t1
-            WHERE t1.year=${args[1]} AND t1.no!=-1
-            GROUP BY cityid,t1.no
-            )as t3,
-            (SELECT MAX(t2.polls) as polls,t2.cityid as cityid
-            FROM(
-                SELECT SUM(t1.poll) as polls,floor(t1.vill_id/1000000) as cityid,t1.no as no
-                FROM local_polls as t1
-                WHERE t1.year=${args[1]} AND t1.no!=-1
-                GROUP BY cityid,t1.no) as t2
-            GROUP BY t2.cityid)as t4
-        WHERE t4.polls=t3.polls AND t3.cityid=t4.cityid`
-
-        //以城市為單位
-        if (args[3] === 'county') {
-            //範圍:全國
-            if (args[2] == 0) {
-
-            }
-            //範圍:某城市
-            else {
-
-            }
+        
+        const polls = (args[3] === 'village')? 'lp.poll as vote': 'SUM(lp.poll) as vote';
+        let address = '', addressTable = '', addressWhereClause = '', groupByPolicy = 'GROUP BY countyId';
+        if(args[3] === 'village'){
+            address = 'lp.vill_id as villageId, villages.name as villageName, floor(lp.vill_id/10000) as districtId, districts.name as districtName,';
+            addressTable = 'villages, districts,';
+            addressWhereClause = 'and floor(lp.vill_id/10000) = districts.id and lp.vill_id = villages.id';
+            groupByPolicy = '';
         }
-        //以鄉鎮市區為單位
-        else if (args[3] === 'district') {
-            //範圍:全國
-            if (args[2] == 0) {
-
-            }
-            //範圍:某城市
-            else {
-
-            }
+        if(args[3] === 'district'){
+            address = 'floor(lp.vill_id/10000) as districtId, districts.name as districtName,';
+            addressTable = 'districts,';
+            addressWhereClause = 'and floor(lp.vill_id/10000) = districts.id';
+            groupByPolicy = 'GROUP BY districtId';
         }
-        //以村里為單位
-        else {
-            //範圍:全國
-            if (args[2] == 0) {
-
-            }
-            //範圍:某城市
-            else {
-
-            }
+        let specify;
+        if(args[2] == 0){
+            specify = '';
         }
+        else if(args[2] < 100){
+            specify = `and floor(lp.vill_id/1000000) = ${args[2]}`;
+        }
+        else if(args[2] < 1000000){
+            specify = `and floor(lp.vill_id/10000) = ${args[2]}`;
+        }
+        else{
+            specify = `and lp.vill_id = ${args[2]}`;
+        }
+
+        sql = `
+        SELECT ${polls}, ${address} floor(lp.vill_id/1000000) as countyId, cities.name as countyName, lc.cand_id as candidateId, c.name as candidateName, elect.no as no 
+        FROM local_polls as lp, local_candidates as lc, candidates as c, cities, ${addressTable}
+            (
+            SELECT no, city_id
+            FROM 
+                (
+                SELECT SUM(lp.poll) as poll, lp.no, floor(lp.vill_id/1000000) as city_id
+                FROM local_polls as lp
+                WHERE lp.year=${args[1]} and lp.no != -1
+                GROUP BY city_id, no
+                ORDER BY poll DESC
+                )as sumup
+            GROUP BY city_id 
+            )as elect
+        WHERE lp.year = ${args[1]} ${specify} and floor(lp.vill_id/1000000) = elect.city_id and lp.no = elect.no ${addressWhereClause} 
+        AND floor(lp.vill_id/1000000) = cities.id and lc.year = ${args[1]} and lc.city_id = elect.city_id and lc.no = elect.no and lc.cand_id = c.id
+        ${groupByPolicy}
+        `
     }
     else if (args[0] === 'legislator') {
         //參考用sql
         const temp_sql = ``;
 
-        //以選區為單位
-        if (args[3] === 'constituency') {
-            //範圍:全國
-            if (args[2] == 0) {
-                sql = `
-                `
-            }
-            //範圍:某城市
-            else if (args[2] < 100) {
-                sql = `
-                `
-            }
-        }
-        //以村里為單位
-        else if (args[3] === 'village') {
-            //範圍:全國
-            if (args[2] == 0) {
-                console.log(123);
-                sql = `
-                
-                `
-            }
-        }
     }
     //legislator_at_large
     else {
-
+        const temp_sql =`
+        SELECT t3.poll,t3.vill_id,v.name,floor(t3.vill_id/10000),d.name,floor(t3.vill_id/1000000),c.name,l.party_id,p.name,t2.no
+            FROM(SELECT SUM(t1.poll) as polls,t1.no as no
+            FROM legislator_at_large_polls as t1
+            WHERE t1.year=2020 AND t1.no!=-1
+            GROUP BY t1.no
+            ORDER BY SUM(t1.poll) DESC
+            LIMIT 1) as t2, legislator_at_large_polls as t3, villages as v, cities as c, districts as d, legislator_at_large_candidates as l, parties as p
+            WHERE t3.no=t2.no AND t3.year=2020 AND t3.vill_id=v.id AND v.dist=d.id AND d.city=c.id AND floor(t3.vill_id/1000000)=c.id AND floor(t3.vill_id/10000)=d.id AND (l.year=2020 AND l.no=t2.no) AND p.id=l.party_id
+        `
     }
     console.log(sql);
     const rows = await query(sql, []);
@@ -149,16 +132,18 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             // In this case no candidateId or candidateName columns
             if (isRecOrRef) {
                 mainTable = `${type}s AS p`
-                selectedColumns.push("p.no AS no");
+                
+                if (granule === "village") { // case (1)
+                    selectedColumns.push("SUM(GREATEST(p.consent, p.against))              AS vote");
+                    selectedColumns.push("IF(p.consent >= p.against, 'consent', 'against') AS no  ");
+                }
+                else {                       // case (2)
+                    selectedColumns.push("SUM(p.consent)                     AS vv  ");
+                    selectedColumns.push("SUM(p.against)                     AS xx  ");
+                    selectedColumns.push("GREATEST(vv, xx)                   AS vote");
+                    selectedColumns.push("IF(vv >= xx, 'consent', 'against') AS no  ");
+                }
 
-                if (granule === "village") {                          // case (1)
-                    selectedColumns.push(`SUM(MAX(p.consent, p.against)) AS vote`);
-                }
-                else {                                                // case (2)
-                    selectedColumns.push("SUM(p.consent) AS vv  ");
-                    selectedColumns.push("SUM(p.against) AS xx  ");
-                    selectedColumns.push("MAX(vv, xx)    AS vote");
-                }
             }
 
             // In normal election, retrieve all candidates (exclusive of void polls)
@@ -212,7 +197,6 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             selectedColumns.push(`SUM(p.against) AS vote`);
             selectedColumns.push(`"against"      AS no  `);
             break;
-
         default:
             // In this case, it must not be referendum or recall
             if (isRecOrRef) throw new Error(INVALID_REQUEST);
