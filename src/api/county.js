@@ -4,10 +4,6 @@ const MUNICIPALITY = ["台北市", "新北市", "桃園市", "台中市", "台�
 
 export default async function (req, res) {
 
-    if (req.query.year < 2009 || req.query.year > 2020) {
-        res.sendStatus(400);
-        return;
-    }
     const sql = `SELECT name, id FROM cities ORDER BY id`;
     const rows = await query(sql);
     const ret = rows.filter(row => {

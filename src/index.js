@@ -6,6 +6,7 @@ import county from "./api/county";
 import cand from "./api/candidates";
 import dist from "./api/district";
 import village from "./api/villages";
+import constituency from "./api/constituency";
 import poll from "./api/polls";
 dotenv.config();
 
@@ -32,4 +33,5 @@ app.get("/api/get-counties", county);
 app.get("/api/get-candidates", cand);
 app.get("/api/get-districts", dist);
 app.get("/api/get-villages", village);
+app.get("/api/get-constituencies", constituency);
 app.get("/api/get-polls", poll);
