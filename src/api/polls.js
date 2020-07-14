@@ -7,32 +7,32 @@ async function elect(args, res) {
 
     }
     else if (args[0] === 'local') {
-        
-        const polls = (args[3] === 'village')? 'lp.poll as vote': 'SUM(lp.poll) as vote';
+
+        const polls = (args[3] === 'village') ? 'lp.poll as vote' : 'SUM(lp.poll) as vote';
         let address = '', addressTable = '', addressWhereClause = '', groupByPolicy = 'GROUP BY countyId';
-        if(args[3] === 'village'){
+        if (args[3] === 'village') {
             address = 'lp.vill_id as villageId, villages.name as villageName, floor(lp.vill_id/10000) as districtId, districts.name as districtName,';
             addressTable = 'villages, districts,';
             addressWhereClause = 'and floor(lp.vill_id/10000) = districts.id and lp.vill_id = villages.id';
             groupByPolicy = '';
         }
-        if(args[3] === 'district'){
+        if (args[3] === 'district') {
             address = 'floor(lp.vill_id/10000) as districtId, districts.name as districtName,';
             addressTable = 'districts,';
             addressWhereClause = 'and floor(lp.vill_id/10000) = districts.id';
             groupByPolicy = 'GROUP BY districtId';
         }
         let specify;
-        if(args[2] == 0){
+        if (args[2] == 0) {
             specify = '';
         }
-        else if(args[2] < 100){
+        else if (args[2] < 100) {
             specify = `and floor(lp.vill_id/1000000) = ${args[2]}`;
         }
-        else if(args[2] < 1000000){
+        else if (args[2] < 1000000) {
             specify = `and floor(lp.vill_id/10000) = ${args[2]}`;
         }
-        else{
+        else {
             specify = `and lp.vill_id = ${args[2]}`;
         }
 
@@ -63,7 +63,7 @@ async function elect(args, res) {
     }
     //legislator_at_large
     else {
-        const temp_sql =`
+        const temp_sql = `
         SELECT t3.poll,t3.vill_id,v.name,floor(t3.vill_id/10000),d.name,floor(t3.vill_id/1000000),c.name,l.party_id,p.name,t2.no
             FROM(SELECT SUM(t1.poll) as polls,t1.no as no
             FROM legislator_at_large_polls as t1
@@ -132,7 +132,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             // In this case no candidateId or candidateName columns
             if (isRecOrRef) {
                 mainTable = `${type}s AS p`
-                
+
                 if (granule === "village") { // case (1)
                     selectedColumns.push("SUM(GREATEST(p.consent, p.against))              AS vote");
                     selectedColumns.push("IF(p.consent >= p.against, 'consent', 'against') AS no  ");
@@ -185,7 +185,6 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
 
             mainTable = `${type}s AS p`
             selectedColumns.push(`SUM(p.consent) AS vote`);
-            selectedColumns.push(`consent        AS no  `);
             selectedColumns.push(`"consent"      AS no  `);
             break;
 
@@ -212,7 +211,6 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             break;
     }
 
-
     switch (granule) {
         case 'country':
             // In this case, the selected area Id must be 0
@@ -221,8 +219,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             if (type === "recall") throw new Error(INVALID_REQUEST);
 
             // In this case, no matter the election type is, the GROUP BY
-            // policy is to sum up all rows.
-            groupByPolicies.push('*');
+            // policy is to sum up all rows. No new rules.
 
             // Not select any village or to query which district or county 
             // it belongs to; such data are not needed (undefined) accoring 
@@ -242,8 +239,8 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             groupByPolicies.push(`FLOOR(p.vill_id / 1000000)`);
 
             // Select vote and county data
-            selectedColumns.push(`c.id                AS countyId  `);
-            selectedColumns.push(`c.name              AS countyName`);
+            selectedColumns.push(`c.id       AS countyId  `);
+            selectedColumns.push(`c.name     AS countyName`);
             break;
 
         case 'district':
@@ -260,10 +257,10 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             groupByPolicies.push(`FLOOR(p.vill_id / 10000)`);
 
             // Select vote, county and district data
-            selectedColumns.push(`c.id               AS countyId    `);
-            selectedColumns.push(`c.name             AS countyName  `);
-            selectedColumns.push(`d.id               AS districtId  `);
-            selectedColumns.push(`d.name             AS districtName`);
+            selectedColumns.push(`c.id     AS countyId    `);
+            selectedColumns.push(`c.name   AS countyName  `);
+            selectedColumns.push(`d.id     AS districtId  `);
+            selectedColumns.push(`d.name   AS districtName`);
             break;
 
         case 'village':
@@ -286,12 +283,6 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             selectedColumns.push(`d.name             AS districtName`);
             selectedColumns.push(`v.id               AS villageId   `);
             selectedColumns.push(`v.name             AS villageName `);
-
-            // If this is a legislator election, we need constituency data
-            if (type === "legislator") {
-                joinedTables.push("INNER JOIN legislator_constituencies  AS cst  ON p.vill_id = cst.vill_id");
-                selectedColumns.push(`cst.constituency AS constituencyId`);
-            }
             break;
 
         case 'constituency':
@@ -302,19 +293,67 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
 
             // This case is hard and need to lookup table `legislator_constituencies`
             // We need county data and constituency data
-            joinedTables.push("INNER JOIN legislator_constituencies   AS cst   ON p.vill_id                  = cst.vill_id")
-            joinedTables.push("INNER JOIN cities                      AS c     ON FLOOR(p.vill_id / 1000000) = c.id       ")
+            joinedTables.push("INNER JOIN legislator_constituencies   AS lc   ON p.vill_id                  = lc.vill_id")
+            joinedTables.push("INNER JOIN cities                      AS c    ON FLOOR(p.vill_id / 1000000) = c.id       ")
 
             // The GROUP BY policy is by constituency
-            groupByPolicies.push("cst.constituency")
+            groupByPolicies.push("lc.constituency")
 
             // Select columns
-            selectedColumns.push(`${voteColumn}    AS vote          `);
             selectedColumns.push(`c.id             AS countyId      `);
             selectedColumns.push(`c.name           AS countyName    `);
-            selectedColumns.push(`cst.constituency AS constituencyId`);
+            selectedColumns.push(`lc.constituency  AS constituencyId`);
             break;
 
+        default:
+            throw new Error(INVALID_REQUEST);
+    }
+
+    // Determine how to join candidate information
+    switch (type) {
+        case "president":
+            selectedColumns.push(`cand.name   AS candidateName`);
+            selectedColumns.push(`cand.id     AS candidateId  `);
+            selectedColumns.push(`party.id    AS partyId      `);
+            selectedColumns.push(`party.name  AS partyName    `);
+            joinedTables.push(`INNER JOIN ${type}_candidates  AS pc    ON p.no     = pc.no      `);
+            joinedTables.push(`INNER JOIN candidates          AS cand  ON cand.id  = pc.cand_id `);
+            joinedTables.push(`INNER JOIN parties             AS party ON party.id = pc.party_id`);
+            break;
+
+        case "local":
+            selectedColumns.push(`cand.name   AS candidateName`);
+            selectedColumns.push(`cand.id     AS candidateId  `);
+            selectedColumns.push(`party.id    AS partyId      `);
+            selectedColumns.push(`party.name  AS partyName    `);
+            joinedTables.push(`INNER JOIN ${type}_candidates  AS pc    ON FLOOR(p.vill_id / 1000000) = pc.city_id    
+                                    AND p.no = pc.no`);
+            joinedTables.push(`INNER JOIN candidates          AS cand  ON cand.id                    = pc.cand_id `);
+            joinedTables.push(`INNER JOIN parties             AS party ON party.id                   = pc.party_id`);
+            break;
+
+        case "legislator":
+            selectedColumns.push(`cand.name       AS candidateName`);
+            selectedColumns.push(`cand.id         AS candidateId  `);
+            selectedColumns.push(`party.id        AS partyId      `);
+            selectedColumns.push(`party.name      AS partyName    `);
+            joinedTables.push(`INNER JOIN legislator_candidates      AS pc    ON p.no     = pc.no      
+                                    AND lc.constituency = pc.constituency`);
+            joinedTables.push(`INNER JOIN candidates                 AS cand  ON cand.id  = pc.cand_id `);
+            joinedTables.push(`INNER JOIN parties                    AS party ON party.id = pc.party_id`);
+            break;
+
+        case "legislator_at_large":
+            selectedColumns.push(`party.id        AS partyId      `);
+            selectedColumns.push(`party.name      AS partyName    `);
+            joinedTables.push(`INNER JOIN ${type}_candidates   AS pc    ON p.no     = pc.no      `);
+            joinedTables.push(`INNER JOIN parties              AS party ON party.id = pc.party_id`);
+            break;
+
+        case "referendum":
+            break;
+        case "recalls":
+            break;
         default:
             throw new Error(INVALID_REQUEST);
     }
@@ -335,8 +374,8 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
         // - constituency;   if in legislator election
         // - district ID;    or else
         if (type === "legislator") {
-            // Table `legislator_constituency` must have be joined as cst
-            areaWhereClause = `cst.constituency = ${area}`;
+            // Table `legislator_constituency` must have be joined as lc
+            areaWhereClause = `lc.constituency = ${area}`;
         }
         else {
             areaWhereClause = `FLOOR(p.vill_id / 10000) == ${area}`
@@ -351,7 +390,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
     // Determine the where clause about param `year`
     // In normal election as well as recalls, this argument is same as what user gives
     // In referendum, this argument is undefined
-    let yearWhereClause = `p.year = ${year}`;
+    let yearWhereClause = `p.year = ${year} AND pc.year = ${year}`;
     if (type === 'referendum') yearWhereClause = "TRUE";
 
 
@@ -388,14 +427,26 @@ function electTask(year, type, granule, area) {
     // is needed. We can select a list of candidate ID who were elected then perform
     // INNER JOIN with a table which is calculated with all candidates.
     // We need to determine the largest granule (i.e. unit) that fits the election.
-    let unit;
-    switch (elect) {
-        case "president": unit = "country"; break;
-        case "legislator": unit = "constituency"; break;
-        case "local": unit = "county"; break;
-        default: throw new Error(INVALID_REQUEST);
+    let oGranule, oArea;
+    switch (type) {
+        case "president":
+            oGranule = "country";
+            oArea = 0;
+            break;
+        case "legislator":
+            oGranule = "constituency";
+            if (area < 100) oArea = area;
+            else if (area < 1000000) oArea = Math.floor(area / 1000000);
+            break;
+        case "local":
+            oGranule = "local";
+            if (area < 100) oArea = area;
+            else if (area < 1000000) oArea = Math.floor(area / 1000000);
+            break;
+        default:
+            throw new Error(INVALID_REQUEST);
     }
-    const electList = winnerTask(year, type, granule, area, undefined);
+    const electList = winnerTask(year, type, oGranule, oArea, undefined);
     const mainTable = generateSQL(year, type, granule, area, undefined, "all", true, false);
     return `
         SELECT * 
