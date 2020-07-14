@@ -159,7 +159,7 @@ async function task(req, res) {
             // In this case, it must be referendum or recall
             if (!isRecOrRef) throw new Error(INVALID_REQUEST);
 
-            mainTable = `${type}s as p`
+            mainTable = `${type}s AS p`
             voteColumn = "p.against";
             break;
         default:
@@ -270,7 +270,7 @@ async function task(req, res) {
             // This case is hard and need to lookup table `legislator_constituencies`
             // We need county data and constituency data
             joinedTables.push("INNER JOIN legislator_constituencies   AS cst   ON p.vill_id                  = cst.vill_id")
-            joinedTables.push("INNER JOIN cities                    AS c     ON FLOOR(p.vill_id / 1000000) = c.id       ")
+            joinedTables.push("INNER JOIN cities                      AS c     ON FLOOR(p.vill_id / 1000000) = c.id       ")
 
             // The GROUP BY policy is by constituency
             groupByPolicy = "cst.constituency"
