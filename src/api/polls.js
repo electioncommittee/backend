@@ -131,14 +131,12 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
                 mainTable = `${type}s AS p`
                 
                 if (granule === "village") { // case (1)
-                    selectedColumns.push("SUM(GREATEST(p.consent, p.against))              AS vote");
-                    selectedColumns.push("IF(p.consent >= p.against, 'consent', 'against') AS no  ");
+                    selectedColumns.push("SUM(GREATEST(p.consent, p.against))                        AS vote");
+                    selectedColumns.push("IF(p.consent >= p.against, 'consent', 'against')           AS no  ");
                 }
                 else {                       // case (2)
-                    selectedColumns.push("SUM(p.consent)                     AS vv  ");
-                    selectedColumns.push("SUM(p.against)                     AS xx  ");
-                    selectedColumns.push("GREATEST(vv, xx)                   AS vote");
-                    selectedColumns.push("IF(vv >= xx, 'consent', 'against') AS no  ");
+                    selectedColumns.push("GREATEST(SUM(p.consent), SUM(p.against))                   AS vote");
+                    selectedColumns.push("IF(SUM(p.consent) >= SUM(p.against), 'consent', 'against') AS no  ");
                 }
 
             }
