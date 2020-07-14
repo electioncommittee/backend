@@ -1,4 +1,5 @@
 import query from "../../lib/db";
+import { bindKey } from "lodash";
 //args[]=[type, year, area, granule]
 async function elect(args, res) {
     let sql;
@@ -104,6 +105,8 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
     // needed. We have special function for this case.
     if (no === "winner") {
         return winnerTask(year, type, granule, area, caze);
+    } else if (no === "elect") {
+        return electTask(year, type, granule, area);
     }
 
     // Determine the source table to lookup, which contains the target 
@@ -133,7 +136,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
     switch (no) {
         case 'all':
             // This param is not in standard API, but plays as utility for other 
-            // function. Block normal client to send such request
+            // function. Block normal client from sending such request
             if (!isSuperUser) throw new Error(INVALID_REQUEST);
 
             // In recalls or referendums, retrieve whether consent or against.
@@ -148,10 +151,10 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
                 mainTable = `${type}s AS p`
                 selectedColumns.push("p.no AS no");
 
-                if (granule === "village") { // case (1)
+                if (granule === "village") {                          // case (1)
                     selectedColumns.push(`SUM(MAX(p.consent, p.against)) AS vote`);
                 }
-                else {                       // case (2)
+                else {                                                // case (2)
                     selectedColumns.push("SUM(p.consent) AS vv  ");
                     selectedColumns.push("SUM(p.against) AS xx  ");
                     selectedColumns.push("MAX(vv, xx)    AS vote");
@@ -390,7 +393,33 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
     return sql;
 }
 
+function electTask(year, type, granule, area) {
+    // In this case the election type should not be referendums, recalls or 
+    // legislator at large
+    if (type === "referendum") throw new Error(INVALID_REQUEST);
+    if (type === "recall") throw new Error(INVALID_REQUEST);
+    if (type === "legislator_at_large") throw new Error(INVALID_REQUEST);
 
+    // In this case we need to acquire the elect's no number first, hence a subquery
+    // is needed. We can select a list of candidate ID who were elected then perform
+    // INNER JOIN with a table which is calculated with all candidates.
+    // We need to determine the largest granule (i.e. unit) that fits the election.
+    let unit;
+    switch (elect) {
+        case "president": unit = "country"; break;
+        case "legislator": unit = "constituency"; break;
+        case "local": unit = "county"; break;
+        default: throw new Error(INVALID_REQUEST);
+    }
+    const electList = winnerTask(year, type, granule, area, undefined);
+    const mainTable = generateSQL(year, type, granule, area, undefined, "all", true, false);
+    return `
+        SELECT * 
+        FROM (${electList}) AS l 
+        INNER JOIN (${mainTable}) AS r
+            ON l.candidate_id = r.candidate_id
+    `;
+}
 
 function winnerTask(year, type, granule, area, caze) {
 
