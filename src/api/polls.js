@@ -269,7 +269,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
 
         case "referendum":
             break;
-        case "recalls":
+        case "recall":
             break;
         default:
             throw new Error(INVALID_REQUEST);
@@ -308,8 +308,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
     // In normal election as well as recalls, this argument is same as what user gives
     // In referendum, this argument is undefined
     let yearWhereClause = `p.year = ${year} AND pc.year = ${year}`;
-    if (type === 'referendum') yearWhereClause = "TRUE";
-
+    if (type === 'referendum' || type === "recall") yearWhereClause = "TRUE";
 
     // Determine the where clause about param `case`
     // In normal elections, this argument is undefined
@@ -376,9 +375,7 @@ function electTask(year, type, granule, area) {
             throw new Error(INVALID_REQUEST);
     }
     const electList = winnerTask(year, type, oGranule, oArea, undefined);
-    console.debug(electList);
     const mainTable = generateSQL(year, type, granule, area, undefined, "all", true);
-    console.debug(mainTable);
     return `
         SELECT r.* 
         FROM (${electList}) AS l 
@@ -463,8 +460,6 @@ export default async function (req, res) {
             req.query.case,
             req.query.no
         );
-        res.send(sql);
-        return;
         const rows = await query(sql);
         res.send(rows);
     } catch (e) {
