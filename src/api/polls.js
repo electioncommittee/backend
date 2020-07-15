@@ -295,7 +295,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             areaWhereClause = `lc.constituency = ${area}`;
         }
         else {
-            areaWhereClause = `FLOOR(p.vill_id / 10000) == ${area}`
+            areaWhereClause = `FLOOR(p.vill_id / 10000) = ${area}`
         }
     }
     else {
