@@ -8,6 +8,7 @@ import dist from "./api/district";
 import village from "./api/villages";
 import constituency from "./api/constituency";
 import poll from "./api/polls";
+import { updateCandidate, findLike as findCandidates } from "./api/candidates";
 dotenv.config();
 
 const app = express();
@@ -35,3 +36,5 @@ app.get("/api/get-districts", dist);
 app.get("/api/get-villages", village);
 app.get("/api/get-constituencies", constituency);
 app.get("/api/get-polls", poll);
+app.post("/api/update-candidate", updateCandidate);
+app.get("/api/find-candidates", findCandidates);

@@ -464,8 +464,11 @@ export default async function (req, res) {
         const rows = await query(sql);
         res.send(rows);
     } catch (e) {
-        if (e === INVALID_REQUEST) res.sendStatus(400);
-        else throw e;
-        res.sendStatus(400);
+        if (e === INVALID_REQUEST) {
+            res.sendStatus(400);
+        } else {
+            res.sendStatus(500);
+            throw e;
+        }
     }
 }
