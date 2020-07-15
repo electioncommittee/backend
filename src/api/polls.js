@@ -217,7 +217,6 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             // Select columns
             selectedColumns.push(`c.id             AS countyId      `);
             selectedColumns.push(`c.name           AS countyName    `);
-            selectedColumns.push(`lc.constituency  AS constituencyId`);
             break;
 
         default:
@@ -248,10 +247,11 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             break;
 
         case "legislator":
-            selectedColumns.push(`cand.name       AS candidateName`);
-            selectedColumns.push(`cand.id         AS candidateId  `);
-            selectedColumns.push(`party.id        AS partyId      `);
-            selectedColumns.push(`party.name      AS partyName    `);
+            selectedColumns.push(`cand.name        AS candidateName`);
+            selectedColumns.push(`cand.id          AS candidateId  `);
+            selectedColumns.push(`party.id         AS partyId      `);
+            selectedColumns.push(`party.name       AS partyName    `);
+            selectedColumns.push(`lc.constituency  AS constituencyId`);
             joinedTables.push(`INNER JOIN legislator_constituencies  AS lc     ON p.vill_id                  = lc.vill_id 
                                     AND lc.year = ${year}`)
             joinedTables.push(`INNER JOIN legislator_candidates      AS pc     ON p.no                       = pc.no      
