@@ -319,6 +319,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
     else if (type === "referendum") caseWhereClause = `p.ref_case = ${caze}`;
 
     // Generate SQL statment and perform query
+    const groupClause = groupByPolicies.length === 0 ? "" : `GROUP BY ${groupByPolicies.join(', ')}`;
     const sql = `
         SELECT ${selectedColumns.join(', ')} 
         FROM ${mainTable} ${joinedTables.join(' ')}
@@ -326,7 +327,7 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             AND ${candidateWhereClause}
             AND ${areaWhereClause}
             AND ${caseWhereClause}
-        GROUP BY ${groupByPolicies.join(', ')}
+        ${groupClause}
         ${orderClause}
         ${limitClause}
     `;
