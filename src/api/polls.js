@@ -2,7 +2,7 @@ import query from "../../lib/db";
 
 const INVALID_REQUEST = "Invalid argument sent from client.";
 
-function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, orderByPoll = false) {
+function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, orderClause = "", limitClause = "") {
 
     // If this query is concerning about winner or elect, a subquery is 
     // needed. We have special function for this case.
@@ -211,9 +211,9 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
 
             // The GROUP BY policy is by constituency
             groupByPolicies.push("lc.constituency")
-            
+
             joinedTables.push("INNER JOIN cities                     AS c      ON FLOOR(p.vill_id / 1000000) = c.id       ")
-            
+
             // Select columns
             selectedColumns.push(`c.id             AS countyId      `);
             selectedColumns.push(`c.name           AS countyName    `);
@@ -328,7 +328,8 @@ function generateSQL(year, type, granule, area, caze, no, isSuperUser = false, o
             AND ${areaWhereClause}
             AND ${caseWhereClause}
         GROUP BY ${groupByPolicies.join(', ')}
-        ${orderByPoll ? "ORDER BY vote DESC" : ""}
+        ${orderClause}
+        ${limitClause}
     `;
     return sql;
 }
@@ -339,6 +340,15 @@ function electTask(year, type, granule, area) {
     if (type === "referendum") throw new Error(INVALID_REQUEST);
     if (type === "recall") throw new Error(INVALID_REQUEST);
     if (type === "legislator_at_large") throw new Error(INVALID_REQUEST);
+
+    // In some cases calculating elected person and winner is same thing
+    if (
+        granule === "country" // must be president election
+        || (granule === "county" && type === "local")
+        || (granule === "constituency" && type === "legislator")
+    ) {
+        return winnerTask(year, type, granule, area, undefined);
+    }
 
     // In this case we need to acquire the elect's no number first, hence a subquery
     // is needed. We can select a list of candidate ID who were elected then perform
@@ -364,9 +374,11 @@ function electTask(year, type, granule, area) {
             throw new Error(INVALID_REQUEST);
     }
     const electList = winnerTask(year, type, oGranule, oArea, undefined);
-    const mainTable = generateSQL(year, type, granule, area, undefined, "all", true, false);
+    console.debug(electList);
+    const mainTable = generateSQL(year, type, granule, area, undefined, "all", true);
+    console.debug(mainTable);
     return `
-        SELECT * 
+        SELECT r.* 
         FROM (${electList}) AS l 
         INNER JOIN (${mainTable}) AS r
             ON l.candidateId = r.candidateId
@@ -375,17 +387,46 @@ function electTask(year, type, granule, area) {
 
 function winnerTask(year, type, granule, area, caze) {
 
+    // In some cases there would be only one row in the
+    // final data, which can be queried by ordering and
+    // adding limit number
+    if (
+        granule === "country" // area must be 0
+        || (granule === "county" && area > 0 & area < 100)
+        || (granule === "district" && area >= 100 & area < 1000000)
+        || (granule === "constituency" && area >= 100 && area < 1000000)
+        || (granule === "village" && area >= 10000000)
+    ) {
+        return generateSQL(
+            year,
+            type,
+            granule,
+            area,
+            caze,
+            "all",
+            true,
+            "ORDER BY vote DESC",
+            "LIMIT 1"
+        );
+    }
+
+
     // We first SELECT all required rows; then performs a subquery
-    const innerQuery = generateSQL(year, type, granule, area, caze, "all", true, true);
+    const innerQuery = generateSQL(
+        year,
+        type,
+        granule,
+        area,
+        caze,
+        "all",
+        true,
+        "ORDER BY vote DESC"
+    );
 
     // Determine the GROUP BY policy; this depends on granule
     // The ORDER BY policy is always same as GROUP BY
     let groupByAndOrderByPolicy;
     switch (granule) {
-        case "country":
-            // In this case no subquery is needed
-            groupByAndOrderByPolicy = null;
-            break;
         case "county":
             groupByAndOrderByPolicy = "countyId";
             break;
@@ -404,8 +445,8 @@ function winnerTask(year, type, granule, area, caze) {
 
     const query = `
         SELECT * FROM (${innerQuery}) AS tmp
-        GROUP BY ${groupByAndOrderByPolicy || "*"}
-        ORDER BY ${groupByAndOrderByPolicy || "no"}
+        GROUP BY ${groupByAndOrderByPolicy}
+        ORDER BY ${groupByAndOrderByPolicy}
     `
     return query;
 }
