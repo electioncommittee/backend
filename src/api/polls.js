@@ -363,12 +363,14 @@ function electTask(year, type, granule, area) {
         case "legislator":
             oGranule = "constituency";
             if (area < 100) oArea = area;
-            else if (area < 1000000) oArea = Math.floor(area / 1000000);
+            else if (area < 1000000) oArea = Math.floor(area / 10000); // TODO
+            else oArea = Math.floor(area / 1000000); // TODO
             break;
         case "local":
             oGranule = "county";
             if (area < 100) oArea = area;
-            else if (area < 1000000) oArea = Math.floor(area / 1000000);
+            else if (area < 1000000) oArea = Math.floor(area / 10000);
+            else oArea = Math.floor(area / 1000000);
             break;
         default:
             throw new Error(INVALID_REQUEST);
@@ -395,7 +397,7 @@ function winnerTask(year, type, granule, area, caze) {
         || (granule === "county" && area > 0 & area < 100)
         || (granule === "district" && area >= 100 & area < 1000000)
         || (granule === "constituency" && area >= 100 && area < 1000000)
-        || (granule === "village" && area >= 10000000)
+        || (granule === "village" && area >= 1000000)
     ) {
         return generateSQL(
             year,
